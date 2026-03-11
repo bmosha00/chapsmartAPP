@@ -8,4 +8,5 @@ class CurrencyFormatter {
   static String sats(num amount) => '${_sats.format(amount)} sats';
   static String btc(String btc) => '₿ $btc';
   static String percent(double pct) => '${pct.toStringAsFixed(2)}%';
+  static String usd(num amount) => '\$${_tzs.format(amount)}';
 }

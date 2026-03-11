@@ -1,27 +1,35 @@
-# ChapSmart Flutter App
+# ChapSmart Flutter App — v3.0
 
-A professional Flutter mobile app for the ChapSmart Tanzania crypto remittance platform.
+A professional Flutter mobile app for the ChapSmart Tanzania crypto platform.
+Updated to match the ChapSmart API v3.0 documentation.
 
-## Features
+## What Changed (v2 → v3)
 
-- 🔐 Anonymous account creation (no KYC)
-- 💸 Send BTC/Lightning → TZS via Mobile Money
-- 📊 Live BTC price quotes with auto-refresh (60s)
-- ⚡ QR code Lightning invoice display
-- 📜 Transaction history with status filters
-- 🏆 Tiered fee system (Bronze / Silver / Gold)
-- 🌙 Professional dark theme with gold accent
+### Authentication
+- **Onboarding**: Create account OR sign in with Nostr (NIP-98)
+- **Login Screen**: Account number login (unchanged)
+- **Nostr Login Screen**: NEW — Nostr signup + login with NIP-98 signed events
+- **Profile**: Link existing account to Nostr key
 
-## Screens
+### Navigation (Bottom Bar)
+- Removed "Send" tab from bottom nav
+- Now: **Home** | **History** | **Profile** (3 tabs)
+- Services are accessed from the Home dashboard
 
-| Screen | Route | Description |
+### Home Dashboard — Services
+| Service | Route | Description |
 |---|---|---|
-| Onboarding | `/` | App intro + account creation |
-| Login | `/login` | Existing account login |
-| Home Dashboard | `/home` (tab 0) | BTC price card + quick actions |
-| Send Remittance | `/home` (tab 1) | Quote → Invoice → Pay flow |
-| Transaction History | `/home` (tab 2) | Filterable list of past transactions |
-| Profile / Tier Stats | `/home` (tab 3) | Account info + tier progress |
+| **BitRemit** | Push from Home | BTC → M-Pesa remittance (quote→invoice→pay) |
+| **PayBill** | Push from Home | BTC → Airtime top-up (500–15,000 TZS) |
+| **Buy Bitcoin** | Push from Home | TZS → Lightning sats (M-Pesa → Blink) |
+
+### API Integration
+- All endpoints updated to match `https://backend.chapsmart.com/api/v1`
+- Nostr auth: `/auth/nostr/signup`, `/auth/nostr/login`, `/auth/nostr/link`
+- Airtime: `/airtime/quote`, `/airtime/generate`
+- Buy Sats: `/buy/quote`, `/buy/send-sats`, `/buy/mpesa-lookup`
+- Combined history: `/history` returns all 3 product types
+- User stats: `/user/stats` with tier progression
 
 ## Project Structure
 
@@ -30,70 +38,61 @@ lib/
 ├── main.dart
 ├── core/
 │   ├── constants/
-│   │   ├── app_constants.dart     # API URLs, storage keys, config
+│   │   ├── app_constants.dart     # API URLs, storage keys, limits
 │   │   └── app_router.dart        # GoRouter navigation
 │   ├── theme/
-│   │   └── app_theme.dart         # Dark finance theme + AppColors
+│   │   └── app_theme.dart         # Dark finance theme + service colors
 │   └── utils/
 │       ├── app_logger.dart
 │       └── currency_formatter.dart
 ├── data/
 │   ├── models/
-│   │   └── models.dart            # Account, Quote, Invoice, Transaction, UserStats
+│   │   └── models.dart            # Account, Quote, Invoice, BuyQuote, Transaction, etc.
 │   └── services/
-│       └── api_service.dart       # Full Dio-based API client
+│       └── api_service.dart       # Full Dio-based API client (all v3 endpoints)
 └── presentation/
     ├── widgets/
-    │   └── app_widgets.dart       # GoldButton, TierBadge, TransactionTile, etc.
+    │   └── app_widgets.dart       # GoldButton, ServiceCard, TierBadge, GlassCard, etc.
     └── screens/
-        ├── home_shell.dart        # Bottom nav shell + dashboard tab
         ├── onboarding/
-        │   └── onboarding_screen.dart
+        │   └── onboarding_screen.dart   # Create account + Nostr CTA
         ├── auth/
-        │   └── login_screen.dart
+        │   ├── login_screen.dart        # Account number login
+        │   └── nostr_login_screen.dart  # NEW: Nostr signup/login
+        ├── home/
+        │   └── home_shell.dart          # Bottom nav + dashboard with services
         ├── remittance/
-        │   └── remittance_screen.dart   # Full quote→invoice flow
+        │   └── remittance_screen.dart   # BitRemit: quote→invoice→pay
+        ├── airtime/
+        │   └── airtime_screen.dart      # PayBill: airtime quote→invoice
+        ├── buysats/
+        │   └── buysats_screen.dart      # Buy Bitcoin: quote→mpesa→bolt11→claim
         ├── history/
-        │   └── history_screen.dart
+        │   └── history_screen.dart      # Combined history with type filters
         └── profile/
-            └── profile_screen.dart
+            └── profile_screen.dart      # Account info + Nostr link + tier progress
 ```
 
 ## Setup
 
-### 1. Prerequisites
-- Flutter SDK ≥ 3.0.0
-- Dart SDK ≥ 3.0.0
+### 1. Replace `lib/` folder
+Copy all files from `chapsmart_updated/lib/` into your project's `lib/` directory,
+replacing the existing files.
 
-### 2. Install dependencies
+### 2. Update `.env`
+```
+API_BASE_URL=https://backend.chapsmart.com/api/v1
+API_KEY=your_api_key
+API_SECRET=your_api_secret
+```
+
+### 3. Run
 ```bash
 flutter pub get
-```
-
-### 3. Configure API
-Edit `lib/core/constants/app_constants.dart`:
-```dart
-static const String baseUrl = 'https://YOUR-API-DOMAIN.com/api/v1';
-```
-
-### 4. Set API Key
-API keys are stored in flutter_secure_storage. On first run, the app will call
-`POST /auth/createAccount` using the keys configured in your API service.
-
-Before running, inject your API key + secret. You can either:
-- Hardcode temporarily in `api_service.dart` interceptor for testing
-- Or build an admin/config screen to set keys at runtime
-
-### 5. Firebase (optional)
-If using Firebase Auth, add your `google-services.json` (Android) and
-`GoogleService-Info.plist` (iOS) to the respective platform folders.
-
-### 6. Run
-```bash
 flutter run
 ```
 
-## Key Dependencies
+## Key Dependencies (no changes)
 
 | Package | Purpose |
 |---|---|
@@ -104,20 +103,4 @@ flutter run
 | `google_fonts` | DM Sans + Playfair Display |
 | `qr_flutter` | Lightning invoice QR codes |
 | `intl` | Currency formatting |
-
-## API Integration
-
-All API calls are in `lib/data/services/api_service.dart`. The Dio interceptor
-automatically attaches `X-API-Key` and `X-API-Secret` headers to every request.
-
-### Quote + Invoice Flow
-```
-createQuote() → pollQuote() [every 60s] → generateInvoice() → user pays → webhook → payout
-```
-
-## Customization
-
-- **Colors**: Edit `AppColors` in `lib/core/theme/app_theme.dart`
-- **API URL**: Edit `AppConstants.baseUrl`
-- **Fee tiers**: Driven by API response, displayed in Profile screen
-- **Poll interval**: `AppConstants.quotePollSeconds` (default: 60)
+| `flutter_dotenv` | Environment variables |
