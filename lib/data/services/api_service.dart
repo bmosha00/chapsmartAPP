@@ -1,241 +1,71 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/app_logger.dart';
 
-class ApiService {
-  late final Dio _dio;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+class Api {
+  static final Api _i = Api._();
+  factory Api() => _i;
 
-  ApiService() {
-    _dio = Dio(BaseOptions(
-      baseUrl: AppConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: {'Content-Type': 'application/json'},
-    ));
+  late final Dio _d;
+  final _s = const FlutterSecureStorage();
 
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        var apiKey = await _storage.read(key: AppConstants.keyApiKey);
-        var apiSecret = await _storage.read(key: AppConstants.keyApiSecret);
-
-        if (apiKey == null || apiKey.isEmpty) {
-          apiKey = AppConstants.apiKey;
-          if (apiKey.isNotEmpty) {
-            await _storage.write(key: AppConstants.keyApiKey, value: apiKey);
-          }
-        }
-        if (apiSecret == null || apiSecret.isEmpty) {
-          apiSecret = AppConstants.apiSecret;
-          if (apiSecret.isNotEmpty) {
-            await _storage.write(
-                key: AppConstants.keyApiSecret, value: apiSecret);
-          }
-        }
-
-        if (apiKey.isNotEmpty && apiSecret.isNotEmpty) {
-          options.headers['X-API-Key'] = apiKey;
-          options.headers['X-API-Secret'] = apiSecret;
-        }
-        AppLogger.info('→ ${options.method} ${options.path}');
-        handler.next(options);
-      },
-      onError: (error, handler) {
-        AppLogger.error(
-            'API Error: ${error.response?.statusCode} ${error.message}');
-        handler.next(error);
-      },
-    ));
+  Api._() {
+    _d = Dio(BaseOptions(baseUrl: K.baseUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15), headers: {'Content-Type': 'application/json'}));
+    _d.interceptors.add(InterceptorsWrapper(onRequest: (o, h) async {
+      var k = await _s.read(key: K.kApiKey) ?? K.apiKey;
+      var s = await _s.read(key: K.kApiSecret) ?? K.apiSecret;
+      if (k.isNotEmpty) o.headers['X-API-Key'] = k;
+      if (s.isNotEmpty) o.headers['X-API-Secret'] = s;
+      h.next(o);
+    }));
   }
 
-  // ─── Auth ───────────────────────────────────────────────
+  // ── Auth ──
+  Future<Map<String, dynamic>> createAccount() async => (await _d.post('/auth/createAccount')).data;
+  Future<Map<String, dynamic>> login(String acc) async => (await _d.post('/auth/login', data: {'accountNumber': acc})).data;
+  Future<Map<String, dynamic>> nostrSignup(Map e) async => (await _d.post('/auth/nostr/signup', data: {'signedEvent': e})).data;
+  Future<Map<String, dynamic>> nostrLogin(Map e) async => (await _d.post('/auth/nostr/login', data: {'signedEvent': e})).data;
+  Future<Map<String, dynamic>> nostrLink(String acc, Map e) async => (await _d.post('/auth/nostr/link', data: {'accountNumber': acc, 'signedEvent': e})).data;
 
-  Future<Map<String, dynamic>> createAccount() async {
-    final res = await _dio.post('/auth/createAccount');
-    return res.data;
-  }
+  // ── User ──
+  Future<Map<String, dynamic>> stats(String acc) async => (await _d.get('/user/stats', queryParameters: {'accountNumber': acc})).data;
+  Future<Map<String, dynamic>> history(String acc) async => (await _d.post('/history', data: {'accountNumber': acc})).data;
 
-  Future<Map<String, dynamic>> login(String accountNumber) async {
-    final res =
-    await _dio.post('/auth/login', data: {'accountNumber': accountNumber});
-    return res.data;
-  }
+  // ── Remittance ──
+  Future<Map<String, dynamic>> remitQuote({required int tzs, required String phone, required String name, required String acc}) async =>
+      (await _d.post('/invoices/quote', data: {'metadata': {'amountTZS': tzs, 'phoneNumber': phone, 'recipientName': name, 'accountNumber': acc}})).data;
+  Future<Map<String, dynamic>> remitPoll(String id) async => (await _d.get('/invoices/quote/$id')).data;
+  Future<Map<String, dynamic>> remitGenerate(String qid) async => (await _d.post('/invoices/generate', data: {'quoteId': qid})).data;
+  Future<Map<String, dynamic>> remitStatus(String iid) async => (await _d.get('/invoices/status/$iid')).data;
 
-  Future<bool> verifySession(String token, String accountNumber) async {
-    try {
-      final res = await _dio.post('/auth/verify-session', data: {
-        'token': token,
-        'accountNumber': accountNumber,
-      });
-      return res.data['success'] == true;
-    } catch (_) {
-      return false;
-    }
-  }
+  // ── Airtime ──
+  Future<Map<String, dynamic>> airQuote({required int tzs, required String phone, required String acc}) async =>
+      (await _d.post('/airtime/quote', data: {'metadata': {'amountTZS': tzs, 'phoneNumber': phone, 'accountNumber': acc}})).data;
+  Future<Map<String, dynamic>> airPoll(String id) async => (await _d.get('/airtime/quote/$id')).data;
+  Future<Map<String, dynamic>> airGenerate(String qid) async => (await _d.post('/airtime/generate', data: {'quoteId': qid})).data;
 
-  // ─── Nostr Auth ──────────────────────────────────────────
+  // ── Buy Sats ──
+  Future<Map<String, dynamic>> buyQuote({required int tzs, required String acc}) async =>
+      (await _d.post('/buy/quote', data: {'amountTZS': tzs, 'accountNumber': acc})).data;
+  Future<Map<String, dynamic>> buyPoll(String id) async => (await _d.get('/buy/quote/$id')).data;
+  Future<Map<String, dynamic>> mpesaLookup(String mid) async => (await _d.post('/buy/mpesa-lookup', data: {'mpesaId': mid})).data;
+  Future<Map<String, dynamic>> sendSats({required String qid, required String bolt11, required String mpesaId}) async =>
+      (await _d.post('/buy/send-sats', data: {'quoteId': qid, 'bolt11': bolt11, 'mpesaId': mpesaId})).data;
 
-  Future<Map<String, dynamic>> nostrSignup(
-      Map<String, dynamic> signedEvent) async {
-    final res = await _dio
-        .post('/auth/nostr/signup', data: {'signedEvent': signedEvent});
-    return res.data;
-  }
+  // ── Merchant ──
+  Future<Map<String, dynamic>> merchantInfo(String mid) async => (await _d.get('/merchant/$mid')).data;
+  Future<Map<String, dynamic>> merchantPay({required String mid, required int tzs}) async =>
+      (await _d.post('/merchant/pay', data: {'merchantId': mid, 'amount': tzs})).data;
+  Future<Map<String, dynamic>> merchantStatus(String iid) async => (await _d.get('/merchant/status/$iid')).data;
+  Future<Map<String, dynamic>> merchantStats(String mid) async => (await _d.get('/merchant/$mid/stats')).data;
+  Future<Map<String, dynamic>> merchantHistory(String mid) async => (await _d.get('/merchant/$mid/history')).data;
 
-  Future<Map<String, dynamic>> nostrLogin(
-      Map<String, dynamic> signedEvent) async {
-    final res = await _dio
-        .post('/auth/nostr/login', data: {'signedEvent': signedEvent});
-    return res.data;
-  }
+  // ── Name lookup ──
+  Future<Map<String, dynamic>> nameLookup({required String type, required String mobile, required String acc}) async =>
+      (await _d.post('/name-lookup', data: {'type': type, 'mobile': mobile, 'userAccount': acc})).data;
 
-  Future<Map<String, dynamic>> nostrLink(
-      String accountNumber, Map<String, dynamic> signedEvent) async {
-    final res = await _dio.post('/auth/nostr/link', data: {
-      'accountNumber': accountNumber,
-      'signedEvent': signedEvent,
-    });
-    return res.data;
-  }
-
-  // ─── User ────────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> getUserStats(String accountNumber) async {
-    final res = await _dio
-        .get('/user/stats', queryParameters: {'accountNumber': accountNumber});
-    return res.data;
-  }
-
-  // ─── History ─────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> getHistory(String accountNumber) async {
-    final res =
-    await _dio.post('/history', data: {'accountNumber': accountNumber});
-    return res.data;
-  }
-
-  // ─── Remittance Invoices ─────────────────────────────────
-
-  Future<Map<String, dynamic>> createQuote({
-    required int amountTZS,
-    required String phoneNumber,
-    required String recipientName,
-    required String accountNumber,
-  }) async {
-    final res = await _dio.post('/invoices/quote', data: {
-      'metadata': {
-        'amountTZS': amountTZS,
-        'phoneNumber': phoneNumber,
-        'recipientName': recipientName,
-        'accountNumber': accountNumber,
-      },
-    });
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> pollQuote(String quoteId) async {
-    final res = await _dio.get('/invoices/quote/$quoteId');
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> generateInvoice(String quoteId) async {
-    final res =
-    await _dio.post('/invoices/generate', data: {'quoteId': quoteId});
-    return res.data;
-  }
-
-  // ─── Airtime ─────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> createAirtimeQuote({
-    required int amountTZS,
-    required String phoneNumber,
-    required String accountNumber,
-  }) async {
-    final res = await _dio.post('/airtime/quote', data: {
-      'metadata': {
-        'amountTZS': amountTZS,
-        'phoneNumber': phoneNumber,
-        'accountNumber': accountNumber,
-      },
-    });
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> pollAirtimeQuote(String quoteId) async {
-    final res = await _dio.get('/airtime/quote/$quoteId');
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> generateAirtimeInvoice(String quoteId) async {
-    final res =
-    await _dio.post('/airtime/generate', data: {'quoteId': quoteId});
-    return res.data;
-  }
-
-  // ─── Buy Sats ────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> createBuyQuote({
-    required int amountTZS,
-    required String accountNumber,
-  }) async {
-    final res = await _dio.post('/buy/quote', data: {
-      'amountTZS': amountTZS,
-      'accountNumber': accountNumber,
-    });
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> getBuyQuote(String quoteId) async {
-    final res = await _dio.get('/buy/quote/$quoteId');
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> mpesaLookup(String mpesaId) async {
-    final res =
-    await _dio.post('/buy/mpesa-lookup', data: {'mpesaId': mpesaId});
-    return res.data;
-  }
-
-  Future<Map<String, dynamic>> sendSats({
-    required String quoteId,
-    required String bolt11,
-    required String mpesaId,
-  }) async {
-    final res = await _dio.post('/buy/send-sats', data: {
-      'quoteId': quoteId,
-      'bolt11': bolt11,
-      'mpesaId': mpesaId,
-    });
-    return res.data;
-  }
-
-  // ─── Name Lookup ─────────────────────────────────────────
-
-  Future<Map<String, dynamic>> nameLookup({
-    required String type,
-    required String mobile,
-    required String userAccount,
-  }) async {
-    final res = await _dio.post('/name-lookup', data: {
-      'type': type,
-      'mobile': mobile,
-      'userAccount': userAccount,
-    });
-    return res.data;
-  }
-
-  // ─── Health ──────────────────────────────────────────────
-
-  Future<bool> healthCheck() async {
-    try {
-      final dio = Dio(BaseOptions(
-        baseUrl: AppConstants.baseUrl.replaceAll('/api/v1', ''),
-      ));
-      final res = await dio.get('/');
-      return res.data['status'] == 'online';
-    } catch (_) {
-      return false;
-    }
+  // ── Health ──
+  Future<bool> health() async {
+    try { return (await Dio().get(K.baseUrl.replaceAll('/api/v1', '/'))).data['status'] == 'ok'; } catch (_) { return false; }
   }
 }

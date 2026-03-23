@@ -1,42 +1,36 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class AppConstants {
-  static String get baseUrl =>
-      dotenv.env['API_BASE_URL'] ?? 'https://backend.chapsmart.com/api/v1';
-
-  static String get adminUrl =>
-      dotenv.env['API_BASE_URL']?.replaceAll('/api/v1', '/api/admin') ??
-          'https://backend.chapsmart.com/api/admin';
-
+class K {
+  // API
+  static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'https://backend.chapsmart.com/api/v1';
   static String get apiKey => dotenv.env['API_KEY'] ?? '';
   static String get apiSecret => dotenv.env['API_SECRET'] ?? '';
 
   // Secure storage keys
-  static const String keyApiKey = 'api_key';
-  static const String keyApiSecret = 'api_secret';
-  static const String keyAccountNumber = 'account_number';
-  static const String keyFirebaseToken = 'firebase_token';
-  static const String keyNostrPubkey = 'nostr_pubkey';
-  static const String keyAuthMethod = 'auth_method';
+  static const kApiKey = 'api_key';
+  static const kApiSecret = 'api_secret';
+  static const kAccount = 'account_number';
+  static const kToken = 'firebase_token';
+  static const kNostr = 'nostr_pubkey';
+  static const kAuth = 'auth_method';
+
+  // Product limits (API v7)
+  static const remitMin = 2500;
+  static const remitMax = 1000000;
+  static const airMin = 500;
+  static const airMax = 15000;
+  static const buyMin = 1000;
+  static const buyMax = 20000;
+  static const merchMin = 2500;
+  static const merchMax = 1000000;
+
+  // M-Pesa agent for buy sats
+  static const mpesaAgent = '1228685';
+
+  // Poll intervals
+  static const quotePollSec = 60;
+  static const statusPollSec = 5;
 
   // Fee tiers
-  static const Map<String, double> tierFees = {
-    'BRONZE': 2.2,
-    'SILVER': 1.87,
-    'GOLD': 1.32,
-  };
-
-  // Amount limits
-  static const int remitMin = 1000;
-  static const int remitMax = 1000000;
-  static const int airtimeMin = 500;
-  static const int airtimeMax = 15000;
-  static const int buySatsMin = 1000;
-  static const int buySatsMax = 20000;
-
-  // M-Pesa agent number for buy sats
-  static const String mpesaAgent = '1228685';
-
-  // Quote poll interval
-  static const int quotePollSeconds = 60;
+  static const tiers = {'BRONZE': 2.2, 'SILVER': 1.87, 'GOLD': 1.32};
 }

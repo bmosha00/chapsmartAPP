@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -10,139 +10,103 @@ import '../../widgets/app_widgets.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _ctrl = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  final _storage = const FlutterSecureStorage();
-  final _api = ApiService();
+class _LoginState extends State<LoginScreen> {
+  final _s = const FlutterSecureStorage();
+  final _api = Api();
   bool _loading = false;
+  String _input = '';
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_input.length < 10) return;
     setState(() => _loading = true);
     try {
-      final res = await _api.login(_ctrl.text.trim());
-      await _storage.write(
-          key: AppConstants.keyAccountNumber, value: _ctrl.text.trim());
-      await _storage.write(key: AppConstants.keyAuthMethod, value: 'account');
-      if (res['customToken'] != null) {
-        await _storage.write(
-            key: AppConstants.keyFirebaseToken, value: res['customToken']);
-      }
+      final r = await _api.login(_input);
+      await _s.write(key: K.kAccount, value: _input);
+      await _s.write(key: K.kAuth, value: 'account');
+      if (r['customToken'] != null) await _s.write(key: K.kToken, value: r['customToken']);
       if (mounted) context.go('/home');
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Login failed. Check your account number.'),
-          backgroundColor: AppColors.error,
-        ));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login failed. Check your number.'), backgroundColor: C.red));
+    } finally { if (mounted) setState(() => _loading = false); }
   }
 
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
+  void _add(String d) { if (_input.length >= 16) return; HapticFeedback.lightImpact(); setState(() => _input += d); }
+  void _del() { if (_input.isEmpty) return; HapticFeedback.lightImpact(); setState(() => _input = _input.substring(0, _input.length - 1)); }
+
+  String get _display {
+    if (_input.isEmpty) return '';
+    final b = StringBuffer();
+    for (int i = 0; i < _input.length; i++) { if (i > 0 && i % 4 == 0) b.write('  '); b.write(_input[i]); }
+    return b.toString();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ok = _input.length >= 10;
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                _BackButton(onTap: () => context.go('/')),
-                const SizedBox(height: 32),
-
-                Text('Sign In',
-                    style: GoogleFonts.dmSans(
-                        color: AppColors.textPrimary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Text('Enter your account number',
-                    style: GoogleFonts.dmSans(
-                        color: AppColors.textSecondary, fontSize: 14)),
-
-                const SizedBox(height: 32),
-                TextFormField(
-                  controller: _ctrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 16,
-                  style: GoogleFonts.dmSans(
-                    color: AppColors.textPrimary,
-                    fontSize: 18,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    hintText: 'Account number',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().length < 10) {
-                      return 'Enter a valid account number';
-                    }
-                    return null;
-                  },
-                ),
-
-                const Spacer(),
-
-                GoldButton(
-                    label: 'Sign In',
-                    onTap: _login,
-                    loading: _loading),
-                const SizedBox(height: 14),
-                Center(
-                  child: GestureDetector(
-                    onTap: () => context.go('/nostr-login'),
-                    child: Text('Sign in with Nostr instead',
-                        style: GoogleFonts.dmSans(
-                            color: AppColors.textSecondary,
-                            fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
+      body: SafeArea(child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SizedBox(height: 12),
+          BackBtn(onTap: () => context.go('/')),
+          const SizedBox(height: 32),
+          const Text('Welcome back', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.5)),
+          const SizedBox(height: 4),
+          const Text('Enter your account number', style: TextStyle(fontSize: 14, color: C.t3)),
+          const SizedBox(height: 28),
+          // Display
+          Container(
+            height: 56, width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _input.isNotEmpty ? C.btc.withOpacity(0.3) : C.border, width: 1.5)),
+            child: Align(alignment: Alignment.centerLeft, child: Text(
+              _display.isEmpty ? '···· ···· ···· ····' : _display,
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono', letterSpacing: 2, color: _input.isEmpty ? C.t3.withOpacity(0.5) : C.t1),
+            )),
           ),
-        ),
-      ),
+          const SizedBox(height: 20),
+          // Keypad
+          Expanded(child: _Keypad(onDigit: _add, onDelete: _del)),
+          const SizedBox(height: 12),
+          Btn(label: 'Sign in', onTap: ok ? _login : null, loading: _loading, enabled: ok),
+          const SizedBox(height: 12),
+          Center(child: GestureDetector(onTap: () => context.go('/nostr'), child: const Text('Use Nostr instead', style: TextStyle(fontSize: 13, color: C.t3)))),
+          const SizedBox(height: 16),
+        ]),
+      )),
     );
   }
 }
 
-class _BackButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _BackButton({required this.onTap});
-
+class _Keypad extends StatelessWidget {
+  final void Function(String) onDigit;
+  final VoidCallback onDelete;
+  const _Keypad({required this.onDigit, required this.onDelete});
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Icon(Icons.arrow_back_rounded,
-            color: AppColors.textPrimary, size: 18),
-      ),
-    );
+    return LayoutBuilder(builder: (_, c) {
+      final gap = 8.0;
+      final kw = (c.maxWidth - gap * 2) / 3;
+      final kh = ((c.maxHeight - gap * 3) / 4).clamp(0.0, 58.0);
+      Widget key(String d) => GestureDetector(
+        onTap: () => onDigit(d),
+        child: Container(width: kw, height: kh, decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+          child: Center(child: Text(d, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: C.t1)))),
+      );
+      Widget empty() => SizedBox(width: kw, height: kh);
+      Widget del() => GestureDetector(onTap: onDelete, child: SizedBox(width: kw, height: kh, child: const Center(child: Icon(Icons.backspace_outlined, color: C.t3, size: 22))));
+      return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [key('1'), SizedBox(width: gap), key('2'), SizedBox(width: gap), key('3')]),
+        SizedBox(height: gap),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [key('4'), SizedBox(width: gap), key('5'), SizedBox(width: gap), key('6')]),
+        SizedBox(height: gap),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [key('7'), SizedBox(width: gap), key('8'), SizedBox(width: gap), key('9')]),
+        SizedBox(height: gap),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [empty(), SizedBox(width: gap), key('0'), SizedBox(width: gap), del()]),
+      ]);
+    });
   }
 }

@@ -1,191 +1,166 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/fmt.dart';
 import '../../../data/services/api_service.dart';
-import '../../../data/models/models.dart';
 import '../../widgets/app_widgets.dart';
 
-enum AirtimeStep { form, quote, invoice, success }
+enum _Step { form, quote, payment }
 
 class AirtimeScreen extends StatefulWidget {
   const AirtimeScreen({super.key});
   @override
-  State<AirtimeScreen> createState() => _AirtimeScreenState();
+  State<AirtimeScreen> createState() => _S();
 }
 
-class _AirtimeScreenState extends State<AirtimeScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _amountCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _storage = const FlutterSecureStorage();
-  final _api = ApiService();
-
-  AirtimeStep _step = AirtimeStep.form;
-  bool _loading = false;
-  Quote? _quote;
-  Invoice? _invoice;
-  Timer? _pollTimer;
-  int _pollCountdown = AppConstants.quotePollSeconds;
-
-  // Quick amounts for airtime
-  final _quickAmounts = [500, 1000, 2000, 5000, 10000, 15000];
+class _S extends State<AirtimeScreen> {
+  final _fk = GlobalKey<FormState>();
+  final _amt = TextEditingController(), _phone = TextEditingController();
+  final _s = const FlutterSecureStorage();
+  final _api = Api();
+  _Step _step = _Step.form;
+  bool _busy = false;
+  Map<String, dynamic>? _q, _inv;
+  Timer? _poll;
+  int _phase = 0;
+  final _quick = [500, 1000, 2000, 5000, 10000, 15000];
 
   @override
-  void dispose() { _pollTimer?.cancel(); _amountCtrl.dispose(); _phoneCtrl.dispose(); super.dispose(); }
+  void dispose() { _poll?.cancel(); _amt.dispose(); _phone.dispose(); super.dispose(); }
 
-  Future<void> _createQuote() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+  Future<void> _getQuote() async {
+    if (!_fk.currentState!.validate()) return;
+    setState(() => _busy = true);
     try {
-      final acc = await _storage.read(key: AppConstants.keyAccountNumber) ?? '';
-      final res = await _api.createAirtimeQuote(amountTZS: int.parse(_amountCtrl.text.replaceAll(',', '')), phoneNumber: _phoneCtrl.text.trim(), accountNumber: acc);
-      setState(() { _quote = Quote.fromJson(res); _step = AirtimeStep.quote; });
-      _startPollTimer();
-    } catch (e) { _showError('Failed to get quote'); }
-    finally { if (mounted) setState(() => _loading = false); }
+      final a = await _s.read(key: K.kAccount) ?? '';
+      final clean = _phone.text.trim().replaceFirst(RegExp(r'^0'), '255');
+      final r = await _api.airQuote(tzs: int.parse(_amt.text.replaceAll(',', '')), phone: clean, acc: a);
+      setState(() { _q = r; _step = _Step.quote; });
+    } catch (_) { _err('Failed'); }
+    finally { if (mounted) setState(() => _busy = false); }
   }
 
-  void _startPollTimer() {
-    _pollCountdown = AppConstants.quotePollSeconds;
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
-      if (!mounted) { t.cancel(); return; }
-      setState(() => _pollCountdown--);
-      if (_pollCountdown <= 0) {
-        _pollCountdown = AppConstants.quotePollSeconds;
-        try { final res = await _api.pollAirtimeQuote(_quote!.quoteId); if (mounted) setState(() => _quote = Quote.fromJson(res)); } catch (_) {}
-      }
+  Future<void> _generate() async {
+    setState(() => _busy = true);
+    try {
+      final r = await _api.airGenerate(_q!['quoteId']);
+      setState(() { _inv = r; _step = _Step.payment; _phase = 0; });
+      _startPoll();
+    } catch (_) { _err('Failed'); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  void _startPoll() {
+    _poll?.cancel();
+    int attempts = 0;
+    final iid = _inv!['invoiceId'] ?? '';
+    _poll = Timer.periodic(const Duration(seconds: 5), (t) async {
+      attempts++;
+      if (!mounted || attempts > 60) { t.cancel(); return; }
+      try {
+        try {
+          final inv = await _api.remitStatus(iid);
+          final s = inv['status'] ?? 'pending';
+          if (s == 'settled' && _phase < 1) setState(() => _phase = 1);
+          if (s == 'expired') { t.cancel(); return; }
+        } catch (_) {}
+        final a = await _s.read(key: K.kAccount) ?? '';
+        final h = await _api.history(a);
+        final txs = (h['transactions'] as List? ?? []).cast<Map<String, dynamic>>();
+        final m = txs.where((tx) => tx['type'] == 'airtime' && (tx['invoiceId'] == iid || tx['btcpayInvoiceId'] == iid)).firstOrNull;
+        if (m != null && (m['status'] == 'completed' || m['status'] == 'settled')) {
+          t.cancel(); setState(() => _phase = 2); Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+        }
+      } catch (_) {}
     });
   }
 
-  Future<void> _generateInvoice() async {
-    setState(() => _loading = true);
-    _pollTimer?.cancel();
-    try {
-      final res = await _api.generateAirtimeInvoice(_quote!.quoteId);
-      setState(() { _invoice = Invoice.fromJson(res); _step = AirtimeStep.invoice; });
-    } catch (e) { _showError('Failed to generate invoice'); }
-    finally { if (mounted) setState(() => _loading = false); }
+  void _showSuccess() {
+    final tzs = int.tryParse(_amt.text) ?? 0;
+    SuccessSheet.show(context,
+      title: 'Airtime Delivered!',
+      message: '${Fmt.tzs(tzs)} airtime sent to ${_phone.text.trim()}.',
+      detail: 'Airtime delivered via Beem',
+      icon: Icons.phone_android_rounded, color: C.blue,
+      buttonLabel: 'Top Up Again', onButton: () { Navigator.pop(context); _reset(); },
+      secondaryLabel: 'Back to Home', onSecondary: () { Navigator.pop(context); Navigator.pop(context); },
+    );
   }
 
-  void _reset() { _pollTimer?.cancel(); setState(() { _step = AirtimeStep.form; _quote = null; _invoice = null; _amountCtrl.clear(); _phoneCtrl.clear(); }); }
-  void _showError(String msg) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error)); }
+  void _reset() { _poll?.cancel(); setState(() { _step = _Step.form; _q = null; _inv = null; _phase = 0; _amt.clear(); _phone.clear(); }); }
+  void _err(String m) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: C.red)); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_step == AirtimeStep.form ? 'PayBill - Airtime' : _step == AirtimeStep.quote ? 'Review Quote' : _step == AirtimeStep.invoice ? 'Pay Invoice' : 'Success'),
-          leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () { if (_step != AirtimeStep.form) { _pollTimer?.cancel(); setState(() => _step = AirtimeStep.form); } else { Navigator.of(context).pop(); } })),
-      body: SafeArea(child: AnimatedSwitcher(duration: const Duration(milliseconds: 300), child: _buildBody())),
+      appBar: AppBar(title: Text(_step == _Step.form ? 'Airtime Top-Up' : _step == _Step.quote ? 'Confirm' : 'Payment'),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () { if (_step == _Step.quote) setState(() => _step = _Step.form); else Navigator.pop(context); })),
+      body: SafeArea(child: AnimatedSwitcher(duration: const Duration(milliseconds: 250), child: _body())),
     );
   }
 
-  Widget _buildBody() {
-    switch (_step) {
-      case AirtimeStep.form: return _buildForm();
-      case AirtimeStep.quote: return _buildQuote();
-      case AirtimeStep.invoice: return _buildInvoice();
-      case AirtimeStep.success: return _buildSuccess();
-    }
-  }
+  Widget _body() { switch (_step) { case _Step.form: return _buildForm(); case _Step.quote: return _buildQuote(); case _Step.payment: return _buildPayment(); } }
 
   Widget _buildForm() {
-    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _formKey, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.airtimeColor.withOpacity(0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.airtimeColor.withOpacity(0.2))),
-          child: Row(children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: AppColors.airtimeColor.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.phone_android_rounded, color: AppColors.airtimeColor, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('BTC → Airtime', style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
-              Text('Send Bitcoin, recipient receives airtime', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12)),
-            ])),
-          ])),
-      const SizedBox(height: 24),
-      Text('Quick Amount', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      Wrap(spacing: 8, runSpacing: 8, children: _quickAmounts.map((a) => GestureDetector(
-          onTap: () => setState(() => _amountCtrl.text = a.toString()),
-          child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(
-              color: _amountCtrl.text == a.toString() ? AppColors.airtimeColor.withOpacity(0.15) : AppColors.surface,
-              borderRadius: BorderRadius.circular(10), border: Border.all(color: _amountCtrl.text == a.toString() ? AppColors.airtimeColor : AppColors.border)),
-              child: Text('TZS ${a.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
-                  style: GoogleFonts.dmSans(color: _amountCtrl.text == a.toString() ? AppColors.airtimeColor : AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)))
-      )).toList()),
-      const SizedBox(height: 18),
-      Text('Amount (TZS)', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      TextFormField(controller: _amountCtrl, keyboardType: TextInputType.number,
-          style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
-          decoration: const InputDecoration(prefixText: 'TZS ', hintText: '0'),
-          validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); if (n == null || n < AppConstants.airtimeMin || n > AppConstants.airtimeMax) return 'TZS ${AppConstants.airtimeMin} – ${AppConstants.airtimeMax}'; return null; }),
-      const SizedBox(height: 18),
-      Text('Phone Number', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      TextFormField(controller: _phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(prefixText: '+', hintText: '255740034110'),
-          validator: (v) { if (v == null || v.trim().length < 9) return 'Enter a valid phone number'; return null; }),
+    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _fk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      TextFormField(controller: _amt, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono'), decoration: const InputDecoration(prefixText: 'TZS ', hintText: '1000'),
+        validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); return (n == null || n < K.airMin || n > K.airMax) ? 'Out of range' : null; }),
+      const SizedBox(height: 4), Text('Min ${K.airMin} — Max ${Fmt.compact(K.airMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, runSpacing: 8, children: _quick.map((a) => GestureDetector(onTap: () => setState(() => _amt.text = a.toString()),
+        child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(color: _amt.text == a.toString() ? C.blue.withOpacity(0.08) : C.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: _amt.text == a.toString() ? C.blue.withOpacity(0.3) : C.border)),
+          child: Text('${Fmt.compact(a)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _amt.text == a.toString() ? C.blue : C.t2))))).toList()),
       const SizedBox(height: 16),
-      const InfoBanner(text: 'Airtime will be sent to the number above via Beem Africa.', color: AppColors.airtimeColor, icon: Icons.info_outline_rounded),
-      const SizedBox(height: 28),
-      GoldButton(label: 'Get Quote', onTap: _createQuote, loading: _loading, icon: Icons.search_rounded),
+      const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      TextFormField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: '0741000000'), validator: (v) => (v == null || v.trim().length < 9) ? 'Valid number' : null),
+      const SizedBox(height: 4), const Text('Any Tanzanian mobile number', style: TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 28), Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
     ])));
   }
 
   Widget _buildQuote() {
+    final yp = _q!['youPay'] ?? {};
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
-      Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), decoration: BoxDecoration(color: AppColors.warning.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.warning.withOpacity(0.25))),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Row(children: [const Icon(Icons.refresh_rounded, color: AppColors.warning, size: 15), const SizedBox(width: 6), Text('Refreshes in', style: GoogleFonts.dmSans(color: AppColors.warning, fontSize: 12))]),
-            Text('${_pollCountdown}s', style: GoogleFonts.dmSans(color: AppColors.warning, fontSize: 14, fontWeight: FontWeight.w700)),
-          ])),
-      const SizedBox(height: 24),
-      GlassCard(child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('You Pay', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), TierBadge(tier: _quote!.userTier)]),
-        const SizedBox(height: 8),
-        Text(CurrencyFormatter.sats(_quote!.sats), style: GoogleFonts.playfairDisplay(color: AppColors.gold, fontSize: 34, fontWeight: FontWeight.w700)),
-        const Divider(height: 28, color: AppColors.border),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Airtime Amount', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text(CurrencyFormatter.tzs(_quote!.amountTZS), style: GoogleFonts.dmSans(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600))]),
-      ])),
-      const SizedBox(height: 28),
-      GoldButton(label: 'Lock Price & Generate Invoice', onTap: _generateInvoice, loading: _loading, icon: Icons.lock_rounded),
-      const SizedBox(height: 12),
-      OutlinedButton(onPressed: _reset, child: const Text('Start Over')),
-    ]));
-  }
-
-  Widget _buildInvoice() {
-    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
-      GlassCard(child: Column(children: [
-        Text('Scan to Pay', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)),
-        const SizedBox(height: 16),
-        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-            child: QrImageView(data: _invoice!.bolt11, version: QrVersions.auto, size: 200)),
-        const SizedBox(height: 16),
-        Text(CurrencyFormatter.sats(_invoice!.sats), style: GoogleFonts.playfairDisplay(color: AppColors.gold, fontSize: 28, fontWeight: FontWeight.w700)),
-      ])),
+      Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
+        child: Column(children: [
+          _QR('Airtime', Fmt.tzs(_q!['recipientReceives']?['tzs'] ?? 0), big: true), const Divider(height: 20, color: C.border),
+          _QR('You pay', Fmt.sats(yp['sats'] ?? 0), mono: true),
+          _QR('Fee', Fmt.pct((yp['feePercent'] ?? 0).toDouble())), _QR('To', _phone.text.trim()),
+        ])),
       const SizedBox(height: 16),
-      CopyField(label: 'BOLT11 Invoice', value: _invoice!.bolt11),
-      const SizedBox(height: 24),
-      GoldButton(label: "I've Sent Payment", onTap: () => setState(() => _step = AirtimeStep.success), icon: Icons.check_circle_rounded),
+      Row(children: [
+        Expanded(child: BtnSecondary(label: 'Edit', icon: Icons.arrow_back_rounded, onTap: () => setState(() => _step = _Step.form))),
+        const SizedBox(width: 10),
+        Expanded(child: Btn(label: 'Generate Invoice', onTap: _generate, loading: _busy, icon: Icons.flash_on_rounded)),
+      ]),
     ]));
   }
 
-  Widget _buildSuccess() {
-    return Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.success.withOpacity(0.12), border: Border.all(color: AppColors.success.withOpacity(0.3), width: 2)),
-          child: const Icon(Icons.check_rounded, color: AppColors.success, size: 40)),
-      const SizedBox(height: 24),
-      Text('Airtime Sent!', style: GoogleFonts.playfairDisplay(color: AppColors.textPrimary, fontSize: 26, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 8),
-      Text('Airtime of ${CurrencyFormatter.tzs(_invoice!.amountTZS)} is being delivered.', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
-      const SizedBox(height: 32),
-      GoldButton(label: 'Top Up Again', onTap: _reset, icon: Icons.phone_android_rounded),
-      const SizedBox(height: 12),
-      OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Back to Home')),
+  Widget _buildPayment() {
+    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
+      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)),
+        child: Column(children: [
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: QrImageView(data: _inv!['bolt11'] ?? '', version: QrVersions.auto, size: 200)),
+          const SizedBox(height: 16),
+          Text(Fmt.sats(_inv!['youPay']?['sats'] ?? 0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
+        ])),
+      const SizedBox(height: 12), CopyField(label: 'BOLT11', value: _inv!['bolt11'] ?? ''),
+      const SizedBox(height: 20),
+      StepTracker(steps: const [
+        StepItem(title: 'Waiting for payment', subtitle: 'Pay the Lightning invoice', icon: Icons.flash_on_rounded, color: C.btc),
+        StepItem(title: 'Payment confirmed', subtitle: 'Bitcoin received', icon: Icons.check_rounded, color: C.btc),
+        StepItem(title: 'Airtime delivered', subtitle: 'Top-up complete', icon: Icons.check_circle_rounded, color: C.green),
+      ], currentStep: _phase),
     ]));
   }
+
+  Widget _QR(String l, String v, {bool big = false, bool mono = false}) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+    Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
+    Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: big ? C.btc : C.t1)),
+  ]));
 }

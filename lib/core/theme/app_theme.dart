@@ -1,186 +1,124 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 
-class AppColors {
-  // Primary palette — deep navy + amber gold
-  static const Color background = Color(0xFF080C16);
-  static const Color surface = Color(0xFF101828);
-  static const Color surfaceLight = Color(0xFF1A2236);
-  static const Color surfaceElevated = Color(0xFF1E2A3E);
-  static const Color border = Color(0xFF1F2A40);
-  static const Color borderLight = Color(0xFF2A3754);
+/// ChapSmart Design System
+/// Inspired by: chapsmart.com dashboard (warm cream), Strike (clean),
+/// Revolut (playful cards), Stripe (precision typography)
+class C {
+  // ─── Warm cream palette (from dashboard.html) ──────────
+  static const Color bg = Color(0xFFFDF6EC);
+  static const Color bgWarm = Color(0xFFFAF0E2);
+  static const Color card = Color(0xFFFFFFFF);
+  static const Color border = Color(0x1FB48C5A); // 12% warm brown
+  static const Color borderHover = Color(0x4DF7931A); // 30% btc
 
-  static const Color gold = Color(0xFFF5A623);
-  static const Color goldLight = Color(0xFFFFCA6B);
-  static const Color goldDark = Color(0xFFB87B10);
+  // Brand
+  static const Color btc = Color(0xFFF7931A);
+  static const Color btcDark = Color(0xFFD97C10);
 
-  static const Color textPrimary = Color(0xFFF0F2F8);
-  static const Color textSecondary = Color(0xFF8A93A8);
-  static const Color textMuted = Color(0xFF4A5568);
+  // Semantic
+  static const Color green = Color(0xFF16A34A);
+  static const Color red = Color(0xFFDC2626);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color purple = Color(0xFF8B5CF6);
 
-  static const Color success = Color(0xFF22C55E);
-  static const Color error = Color(0xFFEF4444);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color info = Color(0xFF3B82F6);
+  // Text
+  static const Color t1 = Color(0xFF1A1207); // primary
+  static const Color t2 = Color(0xFF6B5A42); // secondary
+  static const Color t3 = Color(0xFF9C8B74); // muted
 
+  // Service accent colors
+  static const Color send = btc;
+  static const Color airtime = blue;
+  static const Color buySats = green;
+  static const Color merchant = purple;
+
+  // Tier
   static const Color bronze = Color(0xFFCD7F32);
   static const Color silver = Color(0xFFA8A9AD);
-  static const Color goldTier = Color(0xFFFFD700);
+  static const Color gold = Color(0xFFFFD700);
 
-  // Service colors
-  static const Color remittanceColor = Color(0xFF6366F1);
-  static const Color airtimeColor = Color(0xFF10B981);
-  static const Color buySatsColor = Color(0xFFF59E0B);
+  // Nostr
+  static const Color nostr = purple;
 
-  static LinearGradient get goldGradient => const LinearGradient(
-    colors: [goldDark, gold, goldLight],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  // Shadows
+  static final shadow = BoxShadow(
+    color: const Color(0xFF785014).withOpacity(0.04),
+    blurRadius: 8,
+    offset: const Offset(0, 2),
   );
-
-  static LinearGradient get backgroundGradient => const LinearGradient(
-    colors: [Color(0xFF080C16), Color(0xFF0D1220)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
-
-  static LinearGradient get cardGradient => const LinearGradient(
-    colors: [Color(0xFF141E30), Color(0xFF1A2540)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+  static final shadowMd = BoxShadow(
+    color: const Color(0xFF785014).withOpacity(0.06),
+    blurRadius: 32,
+    offset: const Offset(0, 8),
   );
 }
 
 class AppTheme {
-  static ThemeData get dark {
-    final base = ThemeData.dark();
-    return base.copyWith(
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.gold,
-        secondary: AppColors.goldLight,
-        surface: AppColors.surface,
-        error: AppColors.error,
-        onPrimary: AppColors.background,
-        onSecondary: AppColors.background,
-        onSurface: AppColors.textPrimary,
+  static ThemeData get light {
+    return ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: C.bg,
+      fontFamily: 'DM Sans',
+      colorScheme: const ColorScheme.light(
+        primary: C.btc,
+        secondary: C.btcDark,
+        surface: C.card,
+        error: C.red,
+        onPrimary: Colors.white,
+        onSurface: C.t1,
       ),
-      textTheme: GoogleFonts.dmSansTextTheme(base.textTheme).copyWith(
-        displayLarge: GoogleFonts.playfairDisplay(
-          color: AppColors.textPrimary,
-          fontSize: 36,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
-        ),
-        displayMedium: GoogleFonts.playfairDisplay(
-          color: AppColors.textPrimary,
-          fontSize: 28,
-          fontWeight: FontWeight.w600,
-        ),
-        titleLarge: GoogleFonts.dmSans(
-          color: AppColors.textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
-        ),
-        titleMedium: GoogleFonts.dmSans(
-          color: AppColors.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-        bodyLarge: GoogleFonts.dmSans(
-          color: AppColors.textPrimary,
-          fontSize: 16,
-        ),
-        bodyMedium: GoogleFonts.dmSans(
-          color: AppColors.textSecondary,
-          fontSize: 14,
-        ),
-        labelLarge: GoogleFonts.dmSans(
-          color: AppColors.background,
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
-        ),
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.5, height: 1.15),
+        displayMedium: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.5),
+        titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.3),
+        titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.t1),
+        bodyLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: C.t1, height: 1.5),
+        bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: C.t2, height: 1.5),
+        bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: C.t3),
+        labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+        labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.t2),
+        labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.t3, letterSpacing: 0.5),
       ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.background,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.dmSans(
-          color: AppColors.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.gold,
-          foregroundColor: AppColors.background,
-          minimumSize: const Size(double.infinity, 54),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: GoogleFonts.dmSans(
-              fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.3),
-          elevation: 0,
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.gold,
-          side: const BorderSide(color: AppColors.gold, width: 1.5),
-          minimumSize: const Size(double.infinity, 54),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle:
-          GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w600),
+        titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.t1, fontFamily: 'DM Sans'),
+        iconTheme: IconThemeData(color: C.t1),
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceLight,
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.border),
+        fillColor: C.card,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.border, width: 1.5)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.border, width: 1.5)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.btc, width: 1.5)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.red, width: 1.5)),
+        hintStyle: const TextStyle(color: C.t3, fontSize: 15),
+        labelStyle: const TextStyle(color: C.t2, fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: C.t1,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 52),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, fontFamily: 'DM Sans'),
+          elevation: 0,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        labelStyle: GoogleFonts.dmSans(color: AppColors.textSecondary),
-        hintStyle: GoogleFonts.dmSans(color: AppColors.textMuted),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: C.card,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: AppColors.border),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: C.border)),
+        margin: EdgeInsets.zero,
       ),
-      dividerTheme:
-      const DividerThemeData(color: AppColors.border, thickness: 1),
-      bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.gold,
-        unselectedItemColor: AppColors.textMuted,
-        selectedLabelStyle:
-        GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600),
-        unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11),
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-      ),
+      dividerTheme: const DividerThemeData(color: C.border, thickness: 1),
     );
   }
 }

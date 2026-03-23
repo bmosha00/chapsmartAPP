@@ -8,15 +8,9 @@ import '../../presentation/screens/home/home_shell.dart';
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
-    GoRoute(path: '/', builder: (ctx, state) => const OnboardingScreen()),
-    GoRoute(path: '/login', builder: (ctx, state) => const LoginScreen()),
-    GoRoute(path: '/nostr-login', builder: (ctx, state) => const NostrLoginScreen()),
-    GoRoute(path: '/home', builder: (ctx, state) => const HomeShell()),
+    GoRoute(path: '/', builder: (_, __) => const OnboardingScreen()),
+    GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+    GoRoute(path: '/nostr', builder: (_, __) => const NostrLoginScreen()),
+    GoRoute(path: '/home', builder: (_, __) => const HomeShell()),
   ],
-  errorBuilder: (ctx, state) => Scaffold(
-    body: Center(
-      child: Text('Page not found: ${state.error}',
-          style: const TextStyle(color: Colors.white)),
-    ),
-  ),
 );

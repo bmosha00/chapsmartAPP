@@ -1,190 +1,130 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/fmt.dart';
 import '../../../data/services/api_service.dart';
-import '../../../data/models/models.dart';
 import '../../widgets/app_widgets.dart';
 
-enum BuyStep { form, quote, verify, success }
+enum _Step { form, quoteAndSubmit, sending }
 
 class BuySatsScreen extends StatefulWidget {
   const BuySatsScreen({super.key});
   @override
-  State<BuySatsScreen> createState() => _BuySatsScreenState();
+  State<BuySatsScreen> createState() => _S();
 }
 
-class _BuySatsScreenState extends State<BuySatsScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _amountCtrl = TextEditingController();
-  final _bolt11Ctrl = TextEditingController();
-  final _mpesaIdCtrl = TextEditingController();
-  final _storage = const FlutterSecureStorage();
-  final _api = ApiService();
-
-  BuyStep _step = BuyStep.form;
-  bool _loading = false;
-  BuyQuote? _quote;
+class _S extends State<BuySatsScreen> {
+  final _fk = GlobalKey<FormState>();
+  final _amt = TextEditingController(), _bolt = TextEditingController(), _mpesa = TextEditingController();
+  final _s = const FlutterSecureStorage();
+  final _api = Api();
+  _Step _step = _Step.form;
+  bool _busy = false;
+  Map<String, dynamic>? _q;
 
   @override
-  void dispose() { _amountCtrl.dispose(); _bolt11Ctrl.dispose(); _mpesaIdCtrl.dispose(); super.dispose(); }
+  void dispose() { _amt.dispose(); _bolt.dispose(); _mpesa.dispose(); super.dispose(); }
 
-  Future<void> _createQuote() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+  Future<void> _getQuote() async {
+    if (!_fk.currentState!.validate()) return;
+    setState(() => _busy = true);
     try {
-      final acc = await _storage.read(key: AppConstants.keyAccountNumber) ?? '';
-      final res = await _api.createBuyQuote(amountTZS: int.parse(_amountCtrl.text.replaceAll(',', '')), accountNumber: acc);
-      setState(() { _quote = BuyQuote.fromJson(res); _step = BuyStep.quote; });
-    } catch (e) { _showError('Failed to create quote'); }
-    finally { if (mounted) setState(() => _loading = false); }
+      final a = await _s.read(key: K.kAccount) ?? '';
+      final r = await _api.buyQuote(tzs: int.parse(_amt.text.replaceAll(',', '')), acc: a);
+      setState(() { _q = r; _step = _Step.quoteAndSubmit; });
+    } catch (_) { _err('Quote failed'); }
+    finally { if (mounted) setState(() => _busy = false); }
   }
 
-  Future<void> _sendSats() async {
-    if (_bolt11Ctrl.text.trim().isEmpty || _mpesaIdCtrl.text.trim().isEmpty) {
-      _showError('Please fill all fields'); return;
-    }
-    setState(() => _loading = true);
+  Future<void> _send() async {
+    if (_mpesa.text.trim().isEmpty) { _err('Enter M-Pesa ID'); return; }
+    if (_bolt.text.trim().isEmpty || !_bolt.text.trim().startsWith('lnbc')) { _err('Enter valid BOLT11'); return; }
+    setState(() { _busy = true; _step = _Step.sending; });
     try {
-      await _api.sendSats(quoteId: _quote!.quoteId, bolt11: _bolt11Ctrl.text.trim(), mpesaId: _mpesaIdCtrl.text.trim());
-      setState(() => _step = BuyStep.success);
-    } catch (e) { _showError('Failed to send sats. Check details.'); }
-    finally { if (mounted) setState(() => _loading = false); }
+      final r = await _api.sendSats(qid: _q!['quoteId'], bolt11: _bolt.text.trim(), mpesaId: _mpesa.text.trim());
+      final sats = r['satsSent'] ?? _q?['calculatedSats'] ?? 0;
+      if (mounted) {
+        setState(() => _busy = false);
+        SuccessSheet.show(context,
+          title: 'Sats Sent!',
+          message: '$sats sats have been delivered to your Lightning wallet.',
+          detail: 'Lightning payment complete',
+          icon: Icons.flash_on_rounded, color: C.green,
+          buttonLabel: 'Buy More', onButton: () { Navigator.pop(context); _reset(); },
+          secondaryLabel: 'Back to Home', onSecondary: () { Navigator.pop(context); Navigator.pop(context); },
+        );
+      }
+    } catch (_) { _err('Failed — check details'); setState(() { _step = _Step.quoteAndSubmit; _busy = false; }); }
   }
 
-  void _reset() { setState(() { _step = BuyStep.form; _quote = null; _amountCtrl.clear(); _bolt11Ctrl.clear(); _mpesaIdCtrl.clear(); }); }
-  void _showError(String msg) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error)); }
+  void _reset() { setState(() { _step = _Step.form; _q = null; _amt.clear(); _bolt.clear(); _mpesa.clear(); }); }
+  void _err(String m) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: C.red)); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_step == BuyStep.form ? 'Buy Bitcoin' : _step == BuyStep.quote ? 'Your Quote' : _step == BuyStep.verify ? 'Verify & Claim' : 'Success'),
-          leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () { if (_step != BuyStep.form) { setState(() => _step = BuyStep.form); } else { Navigator.of(context).pop(); } })),
-      body: SafeArea(child: AnimatedSwitcher(duration: const Duration(milliseconds: 300), child: _buildBody())),
+      appBar: AppBar(title: Text(_step == _Step.form ? 'Buy Sats' : _step == _Step.sending ? 'Sending...' : 'Pay & Claim'),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () { if (_step == _Step.quoteAndSubmit) setState(() => _step = _Step.form); else if (_step != _Step.sending) Navigator.pop(context); })),
+      body: SafeArea(child: AnimatedSwitcher(duration: const Duration(milliseconds: 250), child: _body())),
     );
   }
 
-  Widget _buildBody() {
-    switch (_step) {
-      case BuyStep.form: return _buildForm();
-      case BuyStep.quote: return _buildQuote();
-      case BuyStep.verify: return _buildVerify();
-      case BuyStep.success: return _buildSuccess();
-    }
+  Widget _body() {
+    if (_step == _Step.sending) return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      CircularProgressIndicator(color: C.btc), SizedBox(height: 16),
+      Text('Sending sats...', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.t1)),
+      SizedBox(height: 6), Text('This may take a few seconds', style: TextStyle(fontSize: 13, color: C.t3)),
+    ]));
+    switch (_step) { case _Step.form: return _buildForm(); case _Step.quoteAndSubmit: return _buildQS(); default: return const SizedBox(); }
   }
 
   Widget _buildForm() {
-    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _formKey, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.buySatsColor.withOpacity(0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.buySatsColor.withOpacity(0.2))),
-          child: Row(children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: AppColors.buySatsColor.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.currency_bitcoin_rounded, color: AppColors.buySatsColor, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('TZS → Lightning Sats', style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
-              Text('Pay M-Pesa, receive sats to your wallet', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12)),
-            ])),
-          ])),
-      const SizedBox(height: 24),
-      Text('Amount (TZS)', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      TextFormField(controller: _amountCtrl, keyboardType: TextInputType.number,
-          style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
-          decoration: const InputDecoration(prefixText: 'TZS ', hintText: '0'),
-          validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); if (n == null || n < AppConstants.buySatsMin || n > AppConstants.buySatsMax) return 'TZS ${AppConstants.buySatsMin} – ${AppConstants.buySatsMax}'; return null; }),
-      const SizedBox(height: 16),
-      InfoBanner(text: 'Send M-Pesa to agent ${AppConstants.mpesaAgent} for the exact amount.', color: AppColors.buySatsColor, icon: Icons.phone_android_rounded),
-      const SizedBox(height: 28),
-      GoldButton(label: 'Get Quote', onTap: _createQuote, loading: _loading, icon: Icons.search_rounded),
-
-      const SizedBox(height: 28),
-      Text('How Buy Bitcoin Works', style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 12),
-      _HowItWorksStep(step: 1, text: 'Get a quote — server calculates sats at live price'),
-      _HowItWorksStep(step: 2, text: 'Generate a BOLT11 invoice in your Lightning wallet'),
-      _HowItWorksStep(step: 3, text: 'Send M-Pesa to agent ${AppConstants.mpesaAgent}'),
-      _HowItWorksStep(step: 4, text: 'Submit quote ID + invoice + M-Pesa ID'),
-      _HowItWorksStep(step: 5, text: 'Server verifies & pays your invoice instantly'),
+    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _fk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      TextFormField(controller: _amt, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono'), decoration: const InputDecoration(prefixText: 'TZS ', hintText: '3000'),
+        validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); return (n == null || n < K.buyMin || n > K.buyMax) ? 'Out of range' : null; }),
+      const SizedBox(height: 4), Text('Min ${Fmt.compact(K.buyMin)} — Max ${Fmt.compact(K.buyMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 28), Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
     ])));
   }
 
-  Widget _buildQuote() {
-    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
-      GlassCard(borderColor: AppColors.buySatsColor.withOpacity(0.3), child: Column(children: [
-        Text('Your Quote', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)),
-        const SizedBox(height: 12),
-        Text('${_quote!.calculatedSats}', style: GoogleFonts.playfairDisplay(color: AppColors.buySatsColor, fontSize: 42, fontWeight: FontWeight.w700)),
-        Text('sats', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 14)),
-        const Divider(height: 28, color: AppColors.border),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('You Pay (M-Pesa)', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text(CurrencyFormatter.tzs(_quote!.amountTZS), style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600))]),
-        const SizedBox(height: 8),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('BTC Price', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text(CurrencyFormatter.usd(_quote!.btcPrice), style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13))]),
-        if (_quote!.priceSource != null) ...[const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Source', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text(_quote!.priceSource!, style: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 13))])],
-      ])),
-      const SizedBox(height: 16),
-      InfoBanner(text: 'Create a BOLT11 invoice for exactly ${_quote!.calculatedSats} sats in your Lightning wallet. Quote valid for 30 minutes.', color: AppColors.warning, icon: Icons.warning_amber_rounded),
-      const SizedBox(height: 16),
-      InfoBanner(text: 'Send TZS ${_quote!.amountTZS} to M-Pesa agent ${AppConstants.mpesaAgent}', color: AppColors.buySatsColor, icon: Icons.phone_android_rounded),
-      const SizedBox(height: 28),
-      GoldButton(label: 'I\'ve Paid & Have Invoice', onTap: () => setState(() => _step = BuyStep.verify), icon: Icons.arrow_forward_rounded),
-      const SizedBox(height: 12),
-      OutlinedButton(onPressed: _reset, child: const Text('Start Over')),
-    ]));
-  }
-
-  Widget _buildVerify() {
+  Widget _buildQS() {
+    final sats = _q!['calculatedSats'] ?? 0;
+    final tzs = _q!['amountTZS'] ?? 0;
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Paste Your BOLT11 Invoice', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      TextFormField(controller: _bolt11Ctrl, maxLines: 3, style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 12),
-          decoration: InputDecoration(hintText: 'lnbc...', hintStyle: GoogleFonts.dmSans(color: AppColors.textMuted, fontSize: 12))),
-      const SizedBox(height: 18),
-      Text('M-Pesa Transaction ID', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      TextFormField(controller: _mpesaIdCtrl, style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500),
-          decoration: InputDecoration(hintText: 'e.g. DAM2MFP8VYM', hintStyle: GoogleFonts.dmSans(color: AppColors.textMuted))),
+      Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
+        child: Column(children: [
+          _QR('You pay', '${Fmt.compact(tzs)} TZS', big: true), const Divider(height: 20, color: C.border),
+          _QR('You receive', '$sats sats', mono: true, color: C.green),
+          _QR('BTC Price', Fmt.usd(_q!['btcPrice'] ?? 0)), _QR('Valid for', '30 minutes'),
+        ])),
       const SizedBox(height: 16),
-      GlassCard(padding: const EdgeInsets.all(14), child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Quote Sats', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text('${_quote!.calculatedSats} sats', style: GoogleFonts.dmSans(color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w600))]),
-        const SizedBox(height: 6),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('M-Pesa Amount', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 13)), Text(CurrencyFormatter.tzs(_quote!.amountTZS), style: GoogleFonts.dmSans(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600))]),
-      ])),
+      Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.green.withOpacity(0.04), borderRadius: BorderRadius.circular(14), border: Border.all(color: C.green.withOpacity(0.12))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Container(width: 32, height: 32, decoration: BoxDecoration(color: C.green.withOpacity(0.1), borderRadius: BorderRadius.circular(9)), child: const Icon(Icons.phone_android_rounded, color: C.green, size: 16)), const SizedBox(width: 8), const Text('KUTOA M-Pesa', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700))]),
+          const SizedBox(height: 12),
+          _MS(1, 'Piga *150*00#'), _MS(2, 'Chagua 2 – Kutoa Pesa'), _MS(3, 'Weka namba ya wakala: ${K.mpesaAgent}'),
+          _MS(4, 'Ingiza kiasi: ${Fmt.compact(tzs)} TZS'), _MS(5, 'Jina: BRIAN'), _MS(6, 'Weka namba yako ya siri na uthibitishe'),
+        ])),
       const SizedBox(height: 16),
-      const InfoBanner(text: 'Server verifies M-Pesa amount, invoice amount, and prevents replay. All checks are server-side.', color: AppColors.info),
-      const SizedBox(height: 28),
-      GoldButton(label: 'Claim Sats', onTap: _sendSats, loading: _loading, icon: Icons.bolt_rounded),
+      const Text('M-Pesa Transaction ID', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      TextFormField(controller: _mpesa, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, fontFamily: 'SpaceMono'), decoration: const InputDecoration(hintText: 'e.g. XKR4MPT9QZN')),
+      const SizedBox(height: 16),
+      const Text('Your BOLT11 Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      TextFormField(controller: _bolt, maxLines: 2, style: const TextStyle(fontSize: 12, fontFamily: 'SpaceMono'), decoration: const InputDecoration(hintText: 'lnbc...')),
+      const SizedBox(height: 4), Text('Generate for exactly $sats sats', style: const TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 24), Btn(label: 'Send Sats', onTap: _send, loading: _busy, icon: Icons.flash_on_rounded),
     ]));
   }
 
-  Widget _buildSuccess() {
-    return Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.buySatsColor.withOpacity(0.12), border: Border.all(color: AppColors.buySatsColor.withOpacity(0.3), width: 2)),
-          child: const Icon(Icons.bolt_rounded, color: AppColors.buySatsColor, size: 40)),
-      const SizedBox(height: 24),
-      Text('Sats Sent!', style: GoogleFonts.playfairDisplay(color: AppColors.textPrimary, fontSize: 26, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 8),
-      Text('${_quote!.calculatedSats} sats have been sent to your Lightning wallet.', style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
-      const SizedBox(height: 32),
-      GoldButton(label: 'Buy More', onTap: _reset, icon: Icons.currency_bitcoin_rounded),
-      const SizedBox(height: 12),
-      OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Back to Home')),
-    ]));
-  }
-}
+  Widget _QR(String l, String v, {bool big = false, bool mono = false, Color? color}) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+    Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
+    Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: color ?? (big ? C.btc : C.t1))),
+  ]));
 
-class _HowItWorksStep extends StatelessWidget {
-  final int step;
-  final String text;
-  const _HowItWorksStep({required this.step, required this.text});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.buySatsColor.withOpacity(0.12)),
-          child: Center(child: Text('$step', style: GoogleFonts.dmSans(color: AppColors.buySatsColor, fontSize: 11, fontWeight: FontWeight.w700)))),
-      const SizedBox(width: 10),
-      Expanded(child: Text(text, style: GoogleFonts.dmSans(color: AppColors.textSecondary, fontSize: 12))),
-    ]));
-  }
+  Widget _MS(int n, String t) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Container(width: 22, height: 22, decoration: BoxDecoration(color: C.green, borderRadius: BorderRadius.circular(7)), child: Center(child: Text('$n', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)))),
+    const SizedBox(width: 8), Expanded(child: Text(t, style: const TextStyle(fontSize: 13, color: C.t2, height: 1.4))),
+  ]));
 }

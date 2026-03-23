@@ -7,21 +7,14 @@ import 'core/constants/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try { await dotenv.load(fileName: '.env'); } catch (_) {}
 
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (_) {
-    // .env file may not exist in all environments
-  }
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFFFDF6EC),
+    systemNavigationBarIconBrightness: Brightness.dark,
   ));
 
   runApp(const ProviderScope(child: ChapSmartApp()));
@@ -29,13 +22,12 @@ void main() async {
 
 class ChapSmartApp extends StatelessWidget {
   const ChapSmartApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'ChapSmart',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
       routerConfig: appRouter,
     );
   }

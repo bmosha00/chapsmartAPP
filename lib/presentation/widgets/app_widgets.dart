@@ -1,380 +1,308 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 
-// ─── App Logo ────────────────────────────────────────────
-// Replace the Container below with Image.asset('assets/logo.png')
-// when you have your logo file ready.
-
-class AppLogo extends StatelessWidget {
-  final double size;
-  const AppLogo({super.key, this.size = 48});
-
+// ─── Primary CTA ─────────────────────────────────────────
+class Btn extends StatelessWidget {
+  final String label; final VoidCallback? onTap; final bool loading, enabled; final IconData? icon;
+  const Btn({super.key, required this.label, this.onTap, this.loading = false, this.enabled = true, this.icon});
   @override
   Widget build(BuildContext context) {
-    // TODO: Replace with your logo image:
-    // return Image.asset('assets/logo.png', width: size, height: size);
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: AppColors.goldGradient,
-        borderRadius: BorderRadius.circular(size * 0.22),
-      ),
-      child: Center(
-        child: Text('C',
-            style: GoogleFonts.playfairDisplay(
-              color: AppColors.background,
-              fontSize: size * 0.48,
-              fontWeight: FontWeight.w800,
-            )),
-      ),
-    );
+    final ok = enabled && !loading;
+    return GestureDetector(onTap: ok ? onTap : null, child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 52, width: double.infinity,
+        decoration: BoxDecoration(color: ok ? C.t1 : C.t1.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
+        child: Center(child: loading
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, color: Colors.white, size: 16), const SizedBox(width: 8)],
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+        ]))));
   }
 }
 
-// ─── Gold Button ─────────────────────────────────────────
-
-class GoldButton extends StatelessWidget {
-  final String label;
-  final VoidCallback? onTap;
-  final bool loading;
-  final IconData? icon;
-
-  const GoldButton({
-    super.key,
-    required this.label,
-    this.onTap,
-    this.loading = false,
-    this.icon,
-  });
-
+// ─── Secondary button ────────────────────────────────────
+class BtnSecondary extends StatelessWidget {
+  final String label; final VoidCallback? onTap; final IconData? icon;
+  const BtnSecondary({super.key, required this.label, this.onTap, this.icon});
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: loading ? null : onTap,
-      child: Container(
-        height: 52,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: AppColors.goldGradient,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Center(
-          child: loading
-              ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                  color: AppColors.background, strokeWidth: 2))
-              : Row(mainAxisSize: MainAxisSize.min, children: [
-            if (icon != null) ...[
-              Icon(icon, color: AppColors.background, size: 17),
-              const SizedBox(width: 6),
-            ],
-            Text(label,
-                style: GoogleFonts.dmSans(
-                  color: AppColors.background,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                )),
-          ]),
-        ),
-      ),
-    );
+    return GestureDetector(onTap: onTap, child: Container(height: 52, width: double.infinity,
+        decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+        child: Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, color: C.t2, size: 16), const SizedBox(width: 8)],
+          Text(label, style: const TextStyle(color: C.t2, fontSize: 15, fontWeight: FontWeight.w600)),
+        ]))));
   }
 }
 
-// ─── Tier Badge ──────────────────────────────────────────
+// ─── Stat card ───────────────────────────────────────────
+class StatCard extends StatelessWidget {
+  final String label, value; final String? sub; final Color? valueColor;
+  const StatCard({super.key, required this.label, required this.value, this.sub, this.valueColor});
+  @override
+  Widget build(BuildContext context) {
+    return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border), boxShadow: [C.shadow]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.t3, letterSpacing: 0.5)),
+          const SizedBox(height: 6),
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: valueColor ?? C.t1)),
+          if (sub != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(sub!, style: const TextStyle(fontSize: 11, color: C.t3))),
+        ]));
+  }
+}
 
+// ─── Tier badge ──────────────────────────────────────────
 class TierBadge extends StatelessWidget {
   final String tier;
   const TierBadge({super.key, required this.tier});
-
-  Color get _color {
-    switch (tier.toUpperCase()) {
-      case 'GOLD':
-        return AppColors.goldTier;
-      case 'SILVER':
-        return AppColors.silver;
-      default:
-        return AppColors.bronze;
-    }
-  }
-
+  Color get _c { switch (tier.toUpperCase()) { case 'GOLD': return C.gold; case 'SILVER': return C.silver; default: return C.bronze; } }
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _color.withOpacity(0.3)),
-      ),
-      child: Text(tier.toUpperCase(),
-          style: GoogleFonts.dmSans(
-            color: _color,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-          )),
-    );
+    return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: C.btc.withOpacity(0.08), borderRadius: BorderRadius.circular(99), border: Border.all(color: C.btc.withOpacity(0.15))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.workspace_premium_rounded, size: 12, color: _c), const SizedBox(width: 4),
+          Text(tier.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btcDark)),
+        ]));
   }
 }
 
-// ─── Stats Card ──────────────────────────────────────────
-
-class StatsCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color? accentColor;
-
-  const StatsCard({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.accentColor,
-  });
-
+// ─── Transaction tile ────────────────────────────────────
+class TxTile extends StatelessWidget {
+  final String title, detail, amount, time, status; final IconData icon; final Color color;
+  const TxTile({super.key, required this.title, required this.detail, required this.amount, required this.time, required this.status, required this.icon, required this.color});
+  Color get _sc { if (status == 'completed' || status == 'settled' || status == 'SUCCESS') return C.green; if (status == 'failed') return C.red; return C.btc; }
   @override
   Widget build(BuildContext context) {
-    final c = accentColor ?? AppColors.gold;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: c, size: 18),
-        const SizedBox(height: 10),
-        Text(value,
-            style: GoogleFonts.dmSans(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: GoogleFonts.dmSans(
-                color: AppColors.textSecondary, fontSize: 11)),
-      ]),
-    );
+    return Container(padding: const EdgeInsets.all(14), margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border), boxShadow: [C.shadow]),
+        child: Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 16)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.t1)),
+            Text(detail, style: const TextStyle(fontSize: 11, color: C.t3), overflow: TextOverflow.ellipsis),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(amount, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.t1)),
+            const SizedBox(height: 2),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: _sc.withOpacity(0.08), borderRadius: BorderRadius.circular(99)),
+                child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _sc))),
+          ]),
+        ]));
   }
 }
 
-// ─── Section Header ──────────────────────────────────────
-
-class SectionHeader extends StatelessWidget {
-  final String title;
-  const SectionHeader({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(title,
-        style: GoogleFonts.dmSans(
-          color: AppColors.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ));
-  }
-}
-
-// ─── Transaction Tile ────────────────────────────────────
-
-class TransactionTile extends StatelessWidget {
-  final String recipientName, phoneNumber, status, type;
-  final int amountTZS, sats;
-  final DateTime date;
-
-  const TransactionTile({
-    super.key,
-    required this.recipientName,
-    required this.phoneNumber,
-    required this.amountTZS,
-    required this.sats,
-    required this.status,
-    required this.type,
-    required this.date,
-  });
-
-  Color get _statusColor {
-    if (status == 'settled' || status == 'SUCCESS') return AppColors.success;
-    if (status == 'failed') return AppColors.error;
-    return AppColors.warning;
-  }
-
-  IconData get _icon {
-    if (type == 'airtime') return Icons.phone_android_rounded;
-    if (type == 'buy-sats') return Icons.currency_bitcoin_rounded;
-    return Icons.send_rounded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(children: [
-        Icon(_icon, color: AppColors.textMuted, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    recipientName.isNotEmpty
-                        ? recipientName
-                        : type.replaceAll('-', ' ').toUpperCase(),
-                    style: GoogleFonts.dmSans(
-                        color: AppColors.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                if (phoneNumber.isNotEmpty)
-                  Text(phoneNumber,
-                      style: GoogleFonts.dmSans(
-                          color: AppColors.textMuted, fontSize: 11)),
-              ]),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('TZS ${_fmt(amountTZS)}',
-              style: GoogleFonts.dmSans(
-                  color: AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-          Container(
-            margin: const EdgeInsets.only(top: 3),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(status,
-                style: GoogleFonts.dmSans(
-                    color: _statusColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600)),
-          ),
-        ]),
-      ]),
-    );
-  }
-
-  String _fmt(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
-      buf.write(s[i]);
-    }
-    return buf.toString();
-  }
-}
-
-// ─── Copy Field ──────────────────────────────────────────
-
+// ─── Copy field ──────────────────────────────────────────
 class CopyField extends StatelessWidget {
   final String label, value;
   const CopyField({super.key, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+        onTap: () { Clipboard.setData(ClipboardData(text: value)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Copied'), backgroundColor: C.t1, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), duration: const Duration(seconds: 1))); },
+        child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+            child: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: C.t3)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 11, fontFamily: 'SpaceMono', color: C.t1), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ])),
+              const Icon(Icons.copy_rounded, color: C.t3, size: 14),
+            ])));
+  }
+}
+
+// ─── Hint ────────────────────────────────────────────────
+class Hint extends StatelessWidget {
+  final String text; final IconData icon; final Color? color;
+  const Hint({super.key, required this.text, this.icon = Icons.info_outline_rounded, this.color});
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? C.btc;
+    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: c.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: c.withOpacity(0.6), size: 15), const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: c.withOpacity(0.7), height: 1.4))),
+        ]));
+  }
+}
+
+// ─── Back button ─────────────────────────────────────────
+class BackBtn extends StatelessWidget {
+  final VoidCallback? onTap;
+  const BackBtn({super.key, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(onTap: onTap ?? () => Navigator.of(context).pop(),
+        child: Container(width: 40, height: 40, decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, border: Border.all(color: C.border)),
+            child: const Icon(Icons.arrow_back_rounded, color: C.t2, size: 18)));
+  }
+}
+
+// ─── Section header ──────────────────────────────────────
+class SecHead extends StatelessWidget {
+  final String title; final String? action; final VoidCallback? onAction;
+  const SecHead({super.key, required this.title, this.action, this.onAction});
+  @override
+  Widget build(BuildContext context) {
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.t1)),
+      if (action != null) GestureDetector(onTap: onAction, child: Text(action!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.btc))),
+    ]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// STEP TRACKER — shows payment lifecycle steps
+// ═══════════════════════════════════════════════════════════
+class StepTracker extends StatelessWidget {
+  final List<StepItem> steps;
+  final int currentStep;
+  const StepTracker({super.key, required this.steps, required this.currentStep});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: GoogleFonts.dmSans(
-                    color: AppColors.textMuted, fontSize: 10)),
-            const SizedBox(height: 2),
-            Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.dmSans(
-                    color: AppColors.textPrimary, fontSize: 12)),
-          ]),
-        ),
-        GestureDetector(
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: value));
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Copied'), duration: const Duration(seconds: 1)),
-            );
-          },
-          child: const Icon(Icons.copy_rounded,
-              color: AppColors.textMuted, size: 14),
-        ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
+      child: Column(children: [
+        for (int i = 0; i < steps.length; i++) ...[
+          _StepRow(step: steps[i], index: i, currentStep: currentStep, isLast: i == steps.length - 1),
+          if (i < steps.length - 1) _StepLine(done: i < currentStep),
+        ],
       ]),
     );
   }
 }
 
-// ─── Info Banner ─────────────────────────────────────────
-
-class InfoBanner extends StatelessWidget {
-  final String text;
-  final Color color;
+class StepItem {
+  final String title;
+  final String subtitle;
   final IconData icon;
+  final Color color;
+  const StepItem({required this.title, required this.subtitle, required this.icon, required this.color});
+}
 
-  const InfoBanner({
+class _StepRow extends StatelessWidget {
+  final StepItem step; final int index, currentStep; final bool isLast;
+  const _StepRow({required this.step, required this.index, required this.currentStep, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone = index < currentStep;
+    final isActive = index == currentStep;
+    final isPending = index > currentStep;
+
+    return Row(children: [
+      Container(width: 36, height: 36,
+        decoration: BoxDecoration(
+          color: isDone ? C.green.withOpacity(0.1) : isActive ? step.color.withOpacity(0.1) : C.bg,
+          shape: BoxShape.circle,
+          border: Border.all(color: isDone ? C.green.withOpacity(0.3) : isActive ? step.color.withOpacity(0.3) : C.border),
+        ),
+        child: Center(child: isDone
+            ? const Icon(Icons.check_rounded, color: C.green, size: 18)
+            : isActive
+            ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: step.color))
+            : Icon(step.icon, color: C.t3, size: 16)),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(step.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isPending ? C.t3 : C.t1)),
+        Text(step.subtitle, style: TextStyle(fontSize: 12, color: isPending ? C.t3.withOpacity(0.6) : C.t3)),
+      ])),
+    ]);
+  }
+}
+
+class _StepLine extends StatelessWidget {
+  final bool done;
+  const _StepLine({required this.done});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(padding: const EdgeInsets.only(left: 17),
+        child: Container(width: 2, height: 24, decoration: BoxDecoration(
+          color: done ? C.green.withOpacity(0.3) : C.border,
+          borderRadius: BorderRadius.circular(1),
+        )));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SUCCESS SHEET — bottom sheet celebration
+// ═══════════════════════════════════════════════════════════
+class SuccessSheet extends StatelessWidget {
+  final String title;
+  final String message;
+  final String? detail;
+  final IconData icon;
+  final Color color;
+  final String buttonLabel;
+  final VoidCallback onButton;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+
+  const SuccessSheet({
     super.key,
-    required this.text,
-    this.color = AppColors.info,
-    this.icon = Icons.info_outline_rounded,
+    required this.title,
+    required this.message,
+    this.detail,
+    this.icon = Icons.check_rounded,
+    this.color = C.green,
+    required this.buttonLabel,
+    required this.onButton,
+    this.secondaryLabel,
+    this.onSecondary,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.15)),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 14),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Text(text,
-                style: GoogleFonts.dmSans(color: color, fontSize: 11))),
-      ]),
+  static void show(BuildContext context, {
+    required String title,
+    required String message,
+    String? detail,
+    IconData icon = Icons.check_rounded,
+    Color color = C.green,
+    required String buttonLabel,
+    required VoidCallback onButton,
+    String? secondaryLabel,
+    VoidCallback? onSecondary,
+  }) {
+    showModalBottomSheet(
+      context: context, isDismissible: false, enableDrag: false,
+      backgroundColor: Colors.transparent, isScrollControlled: true,
+      builder: (_) => SuccessSheet(title: title, message: message, detail: detail, icon: icon, color: color, buttonLabel: buttonLabel, onButton: onButton, secondaryLabel: secondaryLabel, onSecondary: onSecondary),
     );
   }
-}
-
-// ─── Glass Card ──────────────────────────────────────────
-
-class GlassCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsets? padding;
-  final Color? borderColor;
-
-  const GlassCard({super.key, required this.child, this.padding, this.borderColor});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding ?? const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor ?? AppColors.border),
-      ),
-      child: child,
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
+      decoration: const BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 40, height: 4, decoration: BoxDecoration(color: C.border, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 28),
+        Container(width: 72, height: 72, decoration: BoxDecoration(color: color.withOpacity(0.08), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 36)),
+        const SizedBox(height: 20),
+        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: C.t1), textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text(message, style: const TextStyle(fontSize: 14, color: C.t3, height: 1.5), textAlign: TextAlign.center),
+        if (detail != null) ...[
+          const SizedBox(height: 12),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.check_circle_rounded, color: color, size: 16), const SizedBox(width: 8),
+                Flexible(child: Text(detail!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color))),
+              ])),
+        ],
+        const SizedBox(height: 24),
+        Btn(label: buttonLabel, onTap: onButton),
+        if (secondaryLabel != null) ...[
+          const SizedBox(height: 10),
+          BtnSecondary(label: secondaryLabel!, onTap: onSecondary),
+        ],
+      ]),
     );
   }
 }
