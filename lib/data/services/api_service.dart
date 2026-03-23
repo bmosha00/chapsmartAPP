@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import '../../core/constants/app_constants.dart';
 
 class Api {
@@ -12,10 +13,12 @@ class Api {
   Api._() {
     _d = Dio(BaseOptions(baseUrl: K.baseUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15), headers: {'Content-Type': 'application/json'}));
     _d.interceptors.add(InterceptorsWrapper(onRequest: (o, h) async {
-      var k = await _s.read(key: K.kApiKey) ?? K.apiKey;
-      var s = await _s.read(key: K.kApiSecret) ?? K.apiSecret;
-      if (k.isNotEmpty) o.headers['X-API-Key'] = k;
-      if (s.isNotEmpty) o.headers['X-API-Secret'] = s;
+      try {
+        final appCheckToken = await FirebaseAppCheck.instance.getToken();
+        if (appCheckToken != null) {
+          o.headers['X-Firebase-AppCheck'] = appCheckToken;
+        }
+      } catch (_) {}
       h.next(o);
     }));
   }
@@ -66,6 +69,6 @@ class Api {
 
   // ── Health ──
   Future<bool> health() async {
-    try { return (await Dio().get(K.baseUrl.replaceAll('/api/v1', '/'))).data['status'] == 'ok'; } catch (_) { return false; }
+    try { return (await Dio().get(K.baseUrl.replaceAll('/app/v1', '/'))).data['status'] == 'ok'; } catch (_) { return false; }
   }
 }

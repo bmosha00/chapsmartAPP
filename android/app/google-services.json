@@ -1,0 +1,87 @@
+{
+  "project_info": {
+    "project_number": "570364000751",
+    "firebase_url": "https://contactform-chapsmart-default-rtdb.firebaseio.com",
+    "project_id": "contactform-chapsmart",
+    "storage_bucket": "contactform-chapsmart.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:570364000751:android:e92b079359b36849d99e1a",
+        "android_client_info": {
+          "package_name": "com.chapsmart.ussdapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2_pMR5tD-SsZApk2ssdOaJxvhaVGASS0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:570364000751:android:b803e6b4e115646cd99e1a",
+        "android_client_info": {
+          "package_name": "com.example.chapsmart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2_pMR5tD-SsZApk2ssdOaJxvhaVGASS0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:570364000751:android:0f2695c65fccfb09d99e1a",
+        "android_client_info": {
+          "package_name": "tz.brian.mpessa.sms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2_pMR5tD-SsZApk2ssdOaJxvhaVGASS0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:570364000751:android:7bb73daed1ce7031d99e1a",
+        "android_client_info": {
+          "package_name": "tz.co.chapsmart.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2_pMR5tD-SsZApk2ssdOaJxvhaVGASS0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

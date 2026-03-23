@@ -1,4 +1,4 @@
-package com.example.chapsmart
+package tz.co.chapsmart.app
 
 import io.flutter.embedding.android.FlutterActivity
 

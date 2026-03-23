@@ -1,14 +1,10 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class K {
-  // API
-  static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'https://backend.chapsmart.com/api/v1';
-  static String get apiKey => dotenv.env['API_KEY'] ?? '';
-  static String get apiSecret => dotenv.env['API_SECRET'] ?? '';
+  // API — now uses /app/v1 (App Check auth, no API key needed)
+  static String get baseUrl => dotenv.env['API_BASE_URL'] ?? 'https://backend.chapsmart.com/app/v1';
 
   // Secure storage keys
-  static const kApiKey = 'api_key';
-  static const kApiSecret = 'api_secret';
   static const kAccount = 'account_number';
   static const kToken = 'firebase_token';
   static const kNostr = 'nostr_pubkey';
