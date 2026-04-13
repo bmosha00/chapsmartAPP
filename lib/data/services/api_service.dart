@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/constants/app_constants.dart';
 
 class Api {
@@ -13,14 +14,50 @@ class Api {
   Api._() {
     _d = Dio(BaseOptions(baseUrl: K.baseUrl, connectTimeout: const Duration(seconds: 15), receiveTimeout: const Duration(seconds: 15), headers: {'Content-Type': 'application/json'}));
     _d.interceptors.add(InterceptorsWrapper(onRequest: (o, h) async {
+      // App Check token
       try {
         final appCheckToken = await FirebaseAppCheck.instance.getToken();
         if (appCheckToken != null) {
           o.headers['X-Firebase-AppCheck'] = appCheckToken;
         }
       } catch (_) {}
+      // Firebase ID Token
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final idToken = await user.getIdToken();
+          if (idToken != null) {
+            o.headers['Authorization'] = 'Bearer $idToken';
+          }
+        }
+      } catch (_) {}
       h.next(o);
+    }, onError: (e, h) async {
+      // Auto-refresh on 401 and retry once
+      if (e.response?.statusCode == 401) {
+        try {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final newToken = await user.getIdToken(true); // force refresh
+            if (newToken != null) {
+              e.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+              final retry = await _d.fetch(e.requestOptions);
+              return h.resolve(retry);
+            }
+          }
+        } catch (_) {}
+      }
+      h.next(e);
     }));
+  }
+
+  // ── Firebase Auth helper ──
+  Future<void> signInWithCustomToken(String customToken) async {
+    await FirebaseAuth.instance.signInWithCustomToken(customToken);
+  }
+
+  Future<void> signOut() async {
+    await FirebaseAuth.instance.signOut();
   }
 
   // ── Auth ──
@@ -29,6 +66,12 @@ class Api {
   Future<Map<String, dynamic>> nostrSignup(Map e) async => (await _d.post('/auth/nostr/signup', data: {'signedEvent': e})).data;
   Future<Map<String, dynamic>> nostrLogin(Map e) async => (await _d.post('/auth/nostr/login', data: {'signedEvent': e})).data;
   Future<Map<String, dynamic>> nostrLink(String acc, Map e) async => (await _d.post('/auth/nostr/link', data: {'accountNumber': acc, 'signedEvent': e})).data;
+
+  // ── Device registration (FCM) ──
+  Future<Map<String, dynamic>> registerDevice(String fcmToken) async => (await _d.post('/auth/register-device', data: {'fcmToken': fcmToken})).data;
+
+  // ── Account deletion ──
+  Future<Map<String, dynamic>> deleteAccount() async => (await _d.delete('/auth/delete-account')).data;
 
   // ── User ──
   Future<Map<String, dynamic>> stats(String acc) async => (await _d.get('/user/stats', queryParameters: {'accountNumber': acc})).data;
@@ -51,9 +94,9 @@ class Api {
   Future<Map<String, dynamic>> buyQuote({required int tzs, required String acc}) async =>
       (await _d.post('/buy/quote', data: {'amountTZS': tzs, 'accountNumber': acc})).data;
   Future<Map<String, dynamic>> buyPoll(String id) async => (await _d.get('/buy/quote/$id')).data;
-  Future<Map<String, dynamic>> mpesaLookup(String mid) async => (await _d.post('/buy/mpesa-lookup', data: {'mpesaId': mid})).data;
-  Future<Map<String, dynamic>> sendSats({required String qid, required String bolt11, required String mpesaId}) async =>
-      (await _d.post('/buy/send-sats', data: {'quoteId': qid, 'bolt11': bolt11, 'mpesaId': mpesaId})).data;
+  Future<Map<String, dynamic>> sendSats({required String qid, required String bolt11}) async =>
+      (await _d.post('/buy/send-sats', data: {'quoteId': qid, 'bolt11': bolt11})).data;
+  Future<Map<String, dynamic>> buyStatus(String orderId) async => (await _d.get('/buy/status/$orderId')).data;
 
   // ── Merchant ──
   Future<Map<String, dynamic>> merchantInfo(String mid) async => (await _d.get('/merchant/$mid')).data;

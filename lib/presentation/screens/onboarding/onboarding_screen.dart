@@ -45,106 +45,23 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
     setState(() => _loading = true);
     try {
       final r = await _api.createAccount();
+      if (r['customToken'] != null) {
+        await _api.signInWithCustomToken(r['customToken']);
+        await _s.write(key: K.kToken, value: r['customToken']);
+      }
       await _s.write(key: K.kAccount, value: r['accountNumber']);
       await _s.write(key: K.kAuth, value: 'account');
       if (mounted) _showSuccess(r['accountNumber']);
     } catch (e) {
       if (mounted) {
-        final errStr = '$e';
-        if (errStr.contains('401')) {
-          _showTokenDialog();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errStr), backgroundColor: C.red));
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not create account. Please check your connection and try again.'),
+            backgroundColor: C.red,
+          ),
+        );
       }
     } finally { if (mounted) setState(() => _loading = false); }
-  }
-
-  Future<String> _getDebugToken() async {
-    // Wait a moment to ensure Firebase has written the token
-    await Future.delayed(const Duration(seconds: 1));
-    try {
-      const platform = MethodChannel('chapsmart/appcheck');
-      final token = await platform.invokeMethod<String>('getDebugToken');
-      if (token != null && token.isNotEmpty) return token;
-    } catch (_) {}
-    return 'Token not ready yet — close the app completely, reopen, tap Get Started, and try again.';
-  }
-
-  void _showTokenDialog() async {
-    // Show loading first
-    showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
-      backgroundColor: C.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      content: const Column(mainAxisSize: MainAxisSize.min, children: [
-        SizedBox(height: 20),
-        SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: C.btc, strokeWidth: 2)),
-        SizedBox(height: 16),
-        Text('Reading device token...', style: TextStyle(fontSize: 14, color: C.t2)),
-        SizedBox(height: 20),
-      ]),
-    ));
-
-    // Fetch token
-    final token = await _getDebugToken();
-
-    // Close loading dialog
-    if (mounted) Navigator.pop(context);
-
-    // Show token dialog
-    if (!mounted) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
-      backgroundColor: C.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(children: [
-        Container(width: 36, height: 36, decoration: BoxDecoration(color: C.btc.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.security_rounded, color: C.btc, size: 18)),
-        const SizedBox(width: 10),
-        const Text('Device Setup', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.t1)),
-      ]),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text(
-          'This is a one-time setup.\n\nCopy this token and send it to the ChapSmart team on WhatsApp to activate your device:',
-          style: TextStyle(fontSize: 13, color: C.t2, height: 1.5),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
-          child: Column(children: [
-            const Text('YOUR DEVICE TOKEN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: C.t3, letterSpacing: 0.5)),
-            const SizedBox(height: 8),
-            SelectableText(token, style: const TextStyle(fontSize: 13, fontFamily: 'SpaceMono', fontWeight: FontWeight.w600, color: C.btc, height: 1.4)),
-          ]),
-        ),
-        const SizedBox(height: 12),
-        GestureDetector(
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: token));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Token copied!'), backgroundColor: C.green, behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2)),
-            );
-          },
-          child: Container(
-            height: 44, width: double.infinity,
-            decoration: BoxDecoration(color: C.btc.withOpacity(0.06), borderRadius: BorderRadius.circular(10), border: Border.all(color: C.btc.withOpacity(0.15))),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.copy_rounded, color: C.btc, size: 14), SizedBox(width: 6),
-              Text('Copy Token', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.btc)),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text('After the team confirms your token, tap "Try Again" below.', style: TextStyle(fontSize: 11, color: C.t3, height: 1.4)),
-      ]),
-      actions: [
-        TextButton(
-          onPressed: () { Navigator.pop(context); _create(); },
-          child: const Text('Try Again', style: TextStyle(color: C.btc, fontWeight: FontWeight.w600)),
-        ),
-      ],
-    ));
   }
 
   void _showSuccess(String acc) {
@@ -174,7 +91,7 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
           const SizedBox(height: 16),
           const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: C.btc, strokeWidth: 2)),
           const SizedBox(height: 12),
-          const Text('Syncing ChapSmart...', style: TextStyle(fontSize: 13, color: C.t3)),
+          const Text('Loading...', style: TextStyle(fontSize: 13, color: C.t3)),
         ])),
       );
     }
@@ -198,7 +115,7 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
                 TextSpan(text: 'Smart', style: TextStyle(color: C.btc)),
               ])),
               const SizedBox(height: 8),
-              const Text('Bitcoin ↔ Mobile Money', style: TextStyle(fontSize: 15, color: C.t3)),
+              const Text('Bitcoin \u2194 Mobile Money', style: TextStyle(fontSize: 15, color: C.t3)),
               const SizedBox(height: 40),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 _Svc(Icons.send_rounded, 'Send', C.btc),
@@ -223,7 +140,7 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
                     ]))),
               ),
               const SizedBox(height: 20),
-              const Text('No KYC · No personal data', style: TextStyle(fontSize: 12, color: C.t3)),
+              const Text('No KYC \u00b7 No personal data', style: TextStyle(fontSize: 12, color: C.t3)),
               const SizedBox(height: 16),
             ]),
           ),

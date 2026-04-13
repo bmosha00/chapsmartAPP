@@ -24,9 +24,13 @@ class _LoginState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       final r = await _api.login(_input);
+      // Sign in with Firebase to get ID Token for all future requests
+      if (r['customToken'] != null) {
+        await _api.signInWithCustomToken(r['customToken']);
+        await _s.write(key: K.kToken, value: r['customToken']);
+      }
       await _s.write(key: K.kAccount, value: _input);
       await _s.write(key: K.kAuth, value: 'account');
-      if (r['customToken'] != null) await _s.write(key: K.kToken, value: r['customToken']);
       if (mounted) context.go('/home');
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login failed. Check your number.'), backgroundColor: C.red));
@@ -57,7 +61,6 @@ class _LoginState extends State<LoginScreen> {
           const SizedBox(height: 4),
           const Text('Enter your account number', style: TextStyle(fontSize: 14, color: C.t3)),
           const SizedBox(height: 28),
-          // Display
           Container(
             height: 56, width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -68,7 +71,6 @@ class _LoginState extends State<LoginScreen> {
             )),
           ),
           const SizedBox(height: 20),
-          // Keypad
           Expanded(child: _Keypad(onDigit: _add, onDelete: _del)),
           const SizedBox(height: 12),
           Btn(label: 'Sign in', onTap: ok ? _login : null, loading: _loading, enabled: ok),

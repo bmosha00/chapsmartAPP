@@ -24,10 +24,14 @@ class _NostrState extends State<NostrLoginScreen> {
     try {
       final r = _signup ? await _api.nostrSignup({'raw': _ctrl.text.trim()}) : await _api.nostrLogin({'raw': _ctrl.text.trim()});
       if (r['success'] == true) {
+        // Sign in with Firebase to get ID Token for all future requests
+        if (r['customToken'] != null) {
+          await _api.signInWithCustomToken(r['customToken']);
+          await _s.write(key: K.kToken, value: r['customToken']);
+        }
         await _s.write(key: K.kAccount, value: r['accountNumber']);
         await _s.write(key: K.kNostr, value: r['nostrPubkey']);
         await _s.write(key: K.kAuth, value: 'nostr');
-        if (r['customToken'] != null) await _s.write(key: K.kToken, value: r['customToken']);
         if (mounted) context.go('/home');
       }
     } catch (_) {
@@ -53,7 +57,6 @@ class _NostrState extends State<NostrLoginScreen> {
           const SizedBox(height: 4),
           const Text('Authenticate with your Nostr keys', style: TextStyle(fontSize: 14, color: C.t3)),
           const SizedBox(height: 24),
-          // Toggle
           Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(10)),
             child: Row(children: [
               _Tab('Sign in', !_signup, () => setState(() => _signup = false)),
