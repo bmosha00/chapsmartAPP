@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/fmt.dart';
 import '../../../data/services/api_service.dart';
 import '../../widgets/app_widgets.dart';
 
-enum _Step { form, quoteAndBolt11, waiting }
+enum _Step { form, quoteAndBolt11, processing }
 
 class BuySatsScreen extends StatefulWidget {
   const BuySatsScreen({super.key});
@@ -29,9 +30,10 @@ class _S extends State<BuySatsScreen> {
   String? _boundPhone;
   bool _phoneLocked = false;
 
-  // Status tracking
-  String _statusText = 'Inasubiri uthibitisho...';
-  String _statusIcon = 'waiting'; // waiting, received, done, failed, blocked
+  // Phase for StepTracker: 0 = waiting USSD, 1 = payment received, 2 = sats sent
+  int _phase = 0;
+  bool _failed = false;
+  String _failMsg = '';
   int? _satsSent;
 
   @override
@@ -39,6 +41,18 @@ class _S extends State<BuySatsScreen> {
 
   @override
   void dispose() { _poll?.cancel(); _amt.dispose(); _phone.dispose(); _bolt.dispose(); super.dispose(); }
+
+  /// Extract actual error message from DioException response body
+  String _extractError(dynamic e, [String fallback = 'Something went wrong']) {
+    if (e is DioException && e.response?.data is Map) {
+      final data = e.response!.data as Map;
+      return (data['error'] ?? data['message'] ?? fallback).toString();
+    }
+    return fallback;
+  }
+
+  /// Get HTTP status code from DioException
+  int? _statusCode(dynamic e) => e is DioException ? e.response?.statusCode : null;
 
   /// Pre-fill bound phone if account already has one
   Future<void> _loadBoundPhone() async {
@@ -53,59 +67,68 @@ class _S extends State<BuySatsScreen> {
     }
   }
 
+  /// Normalize phone to 255xxxxxxxxx format
+  String _normalizePhone(String raw) {
+    String p = raw.replaceAll(RegExp(r'\s+'), '');
+    if (p.startsWith('+')) p = p.substring(1);
+    if (p.startsWith('0')) p = '255${p.substring(1)}';
+    if (!p.startsWith('255')) p = '255$p';
+    return p;
+  }
+
   Future<void> _getQuote() async {
     if (!_fk.currentState!.validate()) return;
 
-    // Validate phone
     final phoneRaw = _phone.text.trim();
     if (!_phoneLocked && (phoneRaw.isEmpty || phoneRaw.length < 9)) {
-      _err('Ingiza namba ya M-Pesa');
+      _err('Ingiza namba yako ya simu');
       return;
     }
 
-    // Normalize phone
-    String phoneNumber = phoneRaw.replaceAll(RegExp(r'\s+'), '');
-    if (phoneNumber.startsWith('0')) phoneNumber = '255${phoneNumber.substring(1)}';
-    if (phoneNumber.startsWith('+')) phoneNumber = phoneNumber.substring(1);
+    final phoneNumber = _normalizePhone(phoneRaw);
 
     setState(() => _busy = true);
     try {
       final a = await _s.read(key: K.kAccount) ?? '';
-      final r = await _api.buyQuote(tzs: int.parse(_amt.text.replaceAll(',', '')), acc: a);
 
-      // Cache bound phone
+      final r = await _api.buyQuote(
+        tzs: int.parse(_amt.text.replaceAll(',', '')),
+        acc: a,
+        phone: _boundPhone ?? phoneNumber,
+      );
+
+      // Cache bound phone from response
       final bp = r['boundPhone'] as String?;
       if (bp != null && bp.isNotEmpty) {
         await _s.write(key: 'bound_phone', value: bp);
         setState(() {
           _boundPhone = bp;
           _phoneLocked = true;
-          final display = bp.startsWith('255') ? '0${bp.substring(3)}' : bp;
-          _phone.text = display;
+          _phone.text = bp.startsWith('255') ? '0${bp.substring(3)}' : bp;
         });
-      } else {
-        // Phone was just bound by this quote
+      } else if (!_phoneLocked) {
         await _s.write(key: 'bound_phone', value: phoneNumber);
-        setState(() {
-          _boundPhone = phoneNumber;
-          _phoneLocked = true;
-        });
+        setState(() { _boundPhone = phoneNumber; _phoneLocked = true; });
       }
 
       setState(() { _q = r; _step = _Step.quoteAndBolt11; });
     } catch (e) {
-      final msg = e.toString();
-      // Security blocks — Gate 2 phone binding, Gate 3 device limit
-      if (msg.contains('device') || msg.contains('linked to a different') ||
-          msg.contains('already linked') || msg.contains('disabled') ||
-          msg.contains('2 accounts')) {
+      final code = _statusCode(e);
+      final msg = _extractError(e, '');
+
+      if (code == 403 && (msg.contains('linked to a different') ||
+          msg.contains('already linked') || msg.contains('disabled'))) {
         _showBlocked(msg);
-      } else if (msg.contains('403')) {
-        _err('Buy sats is only available in Tanzania');
-      } else if (msg.contains('429')) {
-        _err('Daily limit reached. Try again tomorrow');
+      } else if (code == 403) {
+        _err(msg.isNotEmpty ? msg : 'Buy sats is only available in Tanzania');
+      } else if (code == 429) {
+        _err(msg.isNotEmpty ? msg : 'Daily limit reached. Try again tomorrow');
+      } else if (code == 400) {
+        _err(msg.isNotEmpty ? msg : 'Invalid request');
+      } else if (code == 503) {
+        _err('Cannot fetch BTC price. Try again shortly');
       } else {
-        _err('Quote failed');
+        _err(msg.isNotEmpty ? msg : 'Quote failed');
       }
     }
     finally { if (mounted) setState(() => _busy = false); }
@@ -125,34 +148,38 @@ class _S extends State<BuySatsScreen> {
         final orderId = r['selcomOrderId'] ?? r['orderId'] ?? '';
 
         setState(() {
-          _step = _Step.waiting;
+          _step = _Step.processing;
           _busy = false;
-          _statusText = 'Inasubiri uthibitisho...';
-          _statusIcon = 'waiting';
+          _phase = 0;
+          _failed = false;
+          _failMsg = '';
         });
 
         if (orderId.toString().isNotEmpty) {
           _pollBuyStatus(orderId.toString());
         }
       } else {
-        // Security blocks
         final error = r['error'] ?? 'Payment failed';
-        if (error.toString().contains('device') || error.toString().contains('linked') ||
-            error.toString().contains('Daily buy limit')) {
-          _showBlocked(error.toString());
-        } else {
-          _err(error.toString());
-        }
+        _err(error.toString());
         setState(() => _busy = false);
       }
     } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('409')) {
-        _err('This invoice was already used');
-      } else if (msg.contains('400')) {
-        _err('Invoice amount does not match quote');
+      final code = _statusCode(e);
+      final msg = _extractError(e, '');
+
+      if (code == 409) {
+        _err(msg.isNotEmpty ? msg : 'Invoice conflict — generate a new one');
+      } else if (code == 410) {
+        _err('Quote expired. Please start over');
+        Future.delayed(const Duration(seconds: 2), _reset);
+      } else if (code == 400) {
+        _err(msg.isNotEmpty ? msg : 'Invalid BOLT11 invoice');
+      } else if (code == 429) {
+        _err(msg.isNotEmpty ? msg : 'Daily buy limit reached (10 per day)');
+      } else if (code == 502) {
+        _err('Mobile money payment failed to initiate. Try again');
       } else {
-        _err('Failed \u2014 check your BOLT11 invoice');
+        _err(msg.isNotEmpty ? msg : 'Failed — check your BOLT11 invoice');
       }
       setState(() => _busy = false);
     }
@@ -161,30 +188,37 @@ class _S extends State<BuySatsScreen> {
   void _pollBuyStatus(String orderId) {
     _poll?.cancel();
     int attempts = 0;
-    final maxAttempts = 120; // 10 min at 5s intervals
-    _poll = Timer.periodic(const Duration(seconds: 5), (t) async {
+    final maxAttempts = 150; // ~10 min at 4s intervals
+    _poll = Timer.periodic(const Duration(seconds: 4), (t) async {
       attempts++;
       if (!mounted || attempts > maxAttempts) {
         t.cancel();
-        if (mounted) setState(() { _statusText = 'Muda umeisha \u2014 angalia history baadaye'; _statusIcon = 'failed'; });
+        if (mounted) setState(() { _failed = true; _failMsg = 'Muda umeisha — angalia history baadaye'; });
         return;
       }
       try {
         final r = await _api.buyStatus(orderId);
-        final status = r['status'] ?? '';
-        if (status == 'sats_sent') {
+        final status = (r['status'] ?? '').toString();
+
+        if (status == 'sats_sent' || status == 'completed') {
           t.cancel();
           final sats = r['satsSent'] ?? _q?['calculatedSats'] ?? 0;
-          if (mounted) setState(() { _satsSent = sats is int ? sats : int.tryParse(sats.toString()) ?? 0; _statusIcon = 'done'; _statusText = 'Imekamilika'; });
+          if (mounted) setState(() {
+            _satsSent = sats is int ? sats : int.tryParse(sats.toString()) ?? 0;
+            _phase = 2;
+          });
           Future.delayed(const Duration(milliseconds: 500), _showSuccess);
         } else if (status == 'payment_received') {
-          if (mounted) setState(() { _statusText = 'Malipo yamepokelewa \u2014 inatuma sats...'; _statusIcon = 'received'; });
-        } else if (status == 'failed' || status == 'cancelled' || status == 'payment_failed') {
+          if (mounted && _phase < 1) setState(() => _phase = 1);
+        } else if (status == 'payment_failed' || status == 'cancelled' || status == 'selcom_failed') {
           t.cancel();
-          if (mounted) setState(() { _statusText = r['message'] ?? 'Malipo yameshindwa'; _statusIcon = 'failed'; });
-        } else if (status == 'payout_failed' || status == 'selcom_failed') {
+          if (mounted) setState(() { _failed = true; _failMsg = r['message']?.toString() ?? 'Malipo yameshindwa'; });
+        } else if (status == 'payout_failed') {
           t.cancel();
-          if (mounted) setState(() { _statusText = 'Payment received but sats delivery failed. Contact support@chapsmart.com with order: $orderId'; _statusIcon = 'failed'; });
+          if (mounted) setState(() {
+            _failed = true;
+            _failMsg = 'Payment received but sats delivery failed. Contact support@chapsmart.com with order: $orderId';
+          });
         }
       } catch (_) {}
     });
@@ -194,46 +228,63 @@ class _S extends State<BuySatsScreen> {
     final sats = _satsSent ?? _q?['calculatedSats'] ?? 0;
     SuccessSheet.show(context,
       title: 'Sats Zimetumwa!',
-      message: '$sats sats zimeingia kwenye wallet yako.',
-      detail: 'Lightning payment complete',
+      message: '$sats sats sent to your Lightning wallet.',
+      detail: 'M-Pesa → Bitcoin complete',
       icon: Icons.flash_on_rounded, color: C.green,
       buttonLabel: 'Buy More', onButton: () { Navigator.pop(context); _reset(); },
       secondaryLabel: 'Back to Home', onSecondary: () { Navigator.pop(context); Navigator.pop(context); },
     );
   }
 
-  void _showBlocked(String error) {
-    showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (_) => Container(
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-      decoration: const BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 40, height: 4, decoration: BoxDecoration(color: C.border, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 24),
-        Container(width: 64, height: 64, decoration: BoxDecoration(color: C.red.withOpacity(0.08), shape: BoxShape.circle),
-          child: const Icon(Icons.shield_rounded, color: C.red, size: 32)),
-        const SizedBox(height: 16),
-        const Text('Imezuiliwa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.red)),
-        const SizedBox(height: 8),
-        Text(error, style: const TextStyle(fontSize: 14, color: C.t2, height: 1.6), textAlign: TextAlign.center),
-        const SizedBox(height: 24),
-        BtnSecondary(label: 'Funga', onTap: () => Navigator.pop(context)),
-      ]),
-    ));
+  void _showBlocked(String msg) {
+    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 48, height: 48,
+            decoration: BoxDecoration(color: C.red.withOpacity(0.08), shape: BoxShape.circle),
+            child: const Icon(Icons.block_rounded, color: C.red, size: 24)),
+          const SizedBox(height: 12),
+          const Text('Akaunti Imezuiwa', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.t1)),
+          const SizedBox(height: 8),
+          Text(msg, style: const TextStyle(fontSize: 13, color: C.t2, height: 1.5), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          Btn(label: 'Rudi Nyumbani', onTap: () { Navigator.pop(context); Navigator.pop(context); }, icon: Icons.home_rounded),
+          const SizedBox(height: 16),
+        ]),
+      ));
   }
 
-  void _reset() { _poll?.cancel(); setState(() { _step = _Step.form; _q = null; _satsSent = null; _statusIcon = 'waiting'; _statusText = 'Inasubiri uthibitisho...'; _amt.clear(); _bolt.clear(); }); }
+  void _reset() {
+    _poll?.cancel();
+    setState(() {
+      _step = _Step.form;
+      _q = null;
+      _busy = false;
+      _bolt.clear();
+      _amt.clear();
+      _phase = 0;
+      _failed = false;
+      _failMsg = '';
+      _satsSent = null;
+    });
+  }
+
   void _err(String m) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: C.red)); }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_step == _Step.form ? 'Buy Sats' : _step == _Step.quoteAndBolt11 ? 'Confirm & Pay' : 'Processing...'),
+        title: Text(_step == _Step.form ? 'Buy Sats' : _step == _Step.quoteAndBolt11 ? 'Confirm & Pay' : 'Payment'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () {
             if (_step == _Step.quoteAndBolt11) setState(() => _step = _Step.form);
-            else if (_step != _Step.waiting || _statusIcon == 'failed') Navigator.pop(context);
+            else if (_step == _Step.processing && _failed) _reset();
+            else if (_step == _Step.form) Navigator.pop(context);
+            // Don't allow back during active payment
           },
         ),
       ),
@@ -245,7 +296,7 @@ class _S extends State<BuySatsScreen> {
     switch (_step) {
       case _Step.form: return _buildStep1();
       case _Step.quoteAndBolt11: return _buildStep2();
-      case _Step.waiting: return _buildStep3();
+      case _Step.processing: return _buildStep3();
     }
   }
 
@@ -259,18 +310,18 @@ class _S extends State<BuySatsScreen> {
         controller: _amt,
         keyboardType: TextInputType.number,
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono'),
-        decoration: const InputDecoration(prefixText: 'TZS ', hintText: '3000'),
+        decoration: const InputDecoration(prefixText: 'TZS ', hintText: '10000'),
         validator: (v) {
           final n = int.tryParse(v?.replaceAll(',', '') ?? '');
-          return (n == null || n < K.buyMin || n > K.buyMax) ? 'Out of range' : null;
+          return (n == null || n < K.buyMin || n > K.buyMax) ? 'Min ${K.buyMin} — Max ${K.buyMax} TZS' : null;
         },
       ),
       const SizedBox(height: 4),
-      Text('Min ${Fmt.compact(K.buyMin)} \u2014 Max ${Fmt.compact(K.buyMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
+      Text('Min ${Fmt.compact(K.buyMin)} — Max ${Fmt.compact(K.buyMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 20),
 
-      // Phone Number
-      const Text('Phone Number (M-Pesa)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
+      // Phone Number — all networks accepted
+      const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
       const SizedBox(height: 6),
       TextFormField(
         controller: _phone,
@@ -278,10 +329,16 @@ class _S extends State<BuySatsScreen> {
         readOnly: _phoneLocked,
         style: TextStyle(fontSize: 15, color: _phoneLocked ? C.t2 : C.t1),
         decoration: InputDecoration(
-          hintText: '0741000000',
+          hintText: '0654xxxxxx',
           filled: true,
           fillColor: _phoneLocked ? C.bg : C.card,
         ),
+        validator: (v) {
+          if (_phoneLocked) return null;
+          final raw = v?.trim() ?? '';
+          if (raw.isEmpty || raw.length < 9) return 'Ingiza namba yako ya simu';
+          return null;
+        },
       ),
       const SizedBox(height: 4),
       if (_phoneLocked)
@@ -291,7 +348,7 @@ class _S extends State<BuySatsScreen> {
           const Text('Namba hii imefungwa na akaunti yako', style: TextStyle(fontSize: 11, color: C.green)),
         ])
       else
-        const Text('Namba yako ya M-Pesa \u2014 utapokea USSD prompt', style: TextStyle(fontSize: 11, color: C.t3)),
+        const Text('Namba yako ya simu — utapokea USSD prompt', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 28),
 
       Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
@@ -301,6 +358,8 @@ class _S extends State<BuySatsScreen> {
   /// Step 2: Quote summary + BOLT11 input
   Widget _buildStep2() {
     final sats = _q!['calculatedSats'] ?? 0;
+    final feeSats = _q!['feeSats'] ?? 0;
+    final feePercent = _q!['feePercent'] ?? 0;
     final btcPrice = _q!['btcPrice'] ?? 0;
     final tzs = int.tryParse(_amt.text.replaceAll(',', '')) ?? 0;
 
@@ -311,6 +370,7 @@ class _S extends State<BuySatsScreen> {
           _QR('You pay', '${Fmt.compact(tzs)} TZS', big: true),
           const Divider(height: 20, color: C.border),
           _QR('You receive', '$sats sats', mono: true, color: C.green),
+          _QR('Fee', '$feeSats sats ($feePercent%)'),
           _QR('BTC Price', '\$${(btcPrice is num ? btcPrice : 0).toStringAsFixed(0)}'),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Phone', style: TextStyle(fontSize: 13, color: C.t2)),
@@ -336,7 +396,7 @@ class _S extends State<BuySatsScreen> {
           ]),
           const SizedBox(height: 8),
           Text(
-            'Utapokea USSD kwenye simu yako \u2014 bonyeza 1 kuthibitisha malipo. Sats zitaingia moja kwa moja kwenye wallet yako.',
+            'Utapokea USSD kwenye simu yako — bonyeza 1 kuthibitisha malipo. Sats zitaingia moja kwa moja kwenye wallet yako.',
             style: TextStyle(fontSize: 12, color: C.t2, height: 1.7),
           ),
         ]),
@@ -365,97 +425,64 @@ class _S extends State<BuySatsScreen> {
     ]));
   }
 
-  /// Step 3: USSD waiting / result
+  /// Step 3: Inline StepTracker (like airtime) — shows quote summary + 3-step progress
   Widget _buildStep3() {
-    final phoneDisplay = _phone.text.trim();
-    final amt = int.tryParse(_amt.text.replaceAll(',', '')) ?? 0;
+    final sats = _q!['calculatedSats'] ?? 0;
+    final tzs = int.tryParse(_amt.text.replaceAll(',', '')) ?? 0;
 
-    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
-      const SizedBox(height: 40),
-      // Status icon
-      Container(
-        width: 64, height: 64,
-        decoration: BoxDecoration(
-          color: _statusIcon == 'done' ? C.green.withOpacity(0.08) :
-                 _statusIcon == 'failed' ? C.red.withOpacity(0.08) :
-                 C.btc.withOpacity(0.08),
-          shape: BoxShape.circle,
-        ),
-        child: Center(child: _statusIcon == 'done'
-          ? const Icon(Icons.check_rounded, color: C.green, size: 32)
-          : _statusIcon == 'failed'
-          ? const Icon(Icons.close_rounded, color: C.red, size: 32)
-          : const Icon(Icons.phone_android_rounded, color: C.btc, size: 28)),
-      ),
-      const SizedBox(height: 16),
+    return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Summary card (compact)
+      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)),
+        child: Column(children: [
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              color: _failed ? C.red.withOpacity(0.08) : _phase == 2 ? C.green.withOpacity(0.08) : C.btc.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: Icon(
+              _failed ? Icons.close_rounded : _phase == 2 ? Icons.check_rounded : Icons.phone_android_rounded,
+              color: _failed ? C.red : _phase == 2 ? C.green : C.btc,
+              size: 28,
+            )),
+          ),
+          const SizedBox(height: 12),
+          Text('$sats sats', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
+          const SizedBox(height: 4),
+          Text('${Fmt.compact(tzs)} TZS → ${_phone.text.trim()}', style: const TextStyle(fontSize: 12, color: C.t2)),
+        ])),
 
-      // Title based on status
-      Text(
-        _statusIcon == 'done' ? 'Sats Zimetumwa!' :
-        _statusIcon == 'failed' ? 'Imeshindwa' :
-        _statusIcon == 'received' ? 'Malipo Yamepokelewa' :
-        'Thibitisha kwenye simu yako',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _statusIcon == 'failed' ? C.red : C.t1),
-      ),
-      const SizedBox(height: 6),
+      const SizedBox(height: 20),
 
-      if (_statusIcon == 'done' && _satsSent != null)
-        Text('${_satsSent!.toLocaleString()} sats zimeingia kwenye wallet yako', style: const TextStyle(fontSize: 14, color: C.t2))
-      else if (_statusIcon == 'waiting')
-        Column(children: [
-          Text('USSD prompt imetumwa kwa $phoneDisplay', style: const TextStyle(fontSize: 13, color: C.t2)),
-          const SizedBox(height: 8),
-          Text('Bonyeza 1 kuthibitisha malipo ya ${Fmt.compact(amt)} TZS', style: const TextStyle(fontSize: 12, color: C.t3)),
-        ])
-      else if (_statusIcon == 'received')
-        const Text('Inatuma sats kwenye wallet yako...', style: TextStyle(fontSize: 13, color: C.t2))
-      else if (_statusIcon == 'failed')
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(_statusText, style: const TextStyle(fontSize: 13, color: C.t2, height: 1.5), textAlign: TextAlign.center),
-        ),
+      // StepTracker — same pattern as airtime
+      StepTracker(steps: const [
+        StepItem(title: 'Thibitisha kwenye simu', subtitle: 'Bonyeza 1 kukubali malipo', icon: Icons.phone_android_rounded, color: C.btc),
+        StepItem(title: 'Malipo yamepokelewa', subtitle: 'Inatuma sats...', icon: Icons.check_rounded, color: C.btc),
+        StepItem(title: 'Sats zimetumwa', subtitle: 'Imekamilika kwenye wallet yako', icon: Icons.check_circle_rounded, color: C.green),
+      ], currentStep: _phase),
 
-      const SizedBox(height: 24),
-
-      // Animated status indicator
-      if (_statusIcon != 'done' && _statusIcon != 'failed')
+      // Error message (only on failure)
+      if (_failed) ...[
+        const SizedBox(height: 20),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(color: C.btc.withOpacity(0.06), borderRadius: BorderRadius.circular(20)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: C.btc)),
-            const SizedBox(width: 8),
-            Text(_statusText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btc)),
-          ]),
-        )
-      else if (_statusIcon == 'done')
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(color: C.green.withOpacity(0.06), borderRadius: BorderRadius.circular(20)),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.check_circle_rounded, color: C.green, size: 14),
-            SizedBox(width: 8),
-            Text('Imekamilika', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.green)),
-          ]),
-        )
-      else if (_statusIcon == 'failed')
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(color: C.red.withOpacity(0.06), borderRadius: BorderRadius.circular(20)),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.error_rounded, color: C.red, size: 14),
-            SizedBox(width: 8),
-            Text('Imeshindwa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.red)),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: C.red.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.red.withOpacity(0.15)),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.error_rounded, color: C.red, size: 16),
+            const SizedBox(width: 10),
+            Expanded(child: Text(_failMsg, style: const TextStyle(fontSize: 12, color: C.t2, height: 1.5))),
           ]),
         ),
-
-      const SizedBox(height: 40),
-
-      // Action buttons on failure
-      if (_statusIcon == 'failed') ...[
-        Btn(label: 'Try Again', onTap: _reset, icon: Icons.refresh_rounded),
-        const SizedBox(height: 10),
-        BtnSecondary(label: 'Back to Home', onTap: () => Navigator.pop(context)),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: BtnSecondary(label: 'Back to Home', icon: Icons.home_rounded, onTap: () => Navigator.pop(context))),
+          const SizedBox(width: 10),
+          Expanded(child: Btn(label: 'Try Again', icon: Icons.refresh_rounded, onTap: _reset)),
+        ]),
       ],
     ]));
   }
@@ -464,8 +491,4 @@ class _S extends State<BuySatsScreen> {
     Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
     Flexible(child: Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: color ?? (big ? C.btc : C.t1)), textAlign: TextAlign.right)),
   ]));
-}
-
-extension on int {
-  String toLocaleString() => toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 }

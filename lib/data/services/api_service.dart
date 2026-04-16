@@ -91,8 +91,9 @@ class Api {
   Future<Map<String, dynamic>> airGenerate(String qid) async => (await _d.post('/airtime/generate', data: {'quoteId': qid})).data;
 
   // ── Buy Sats ──
-  Future<Map<String, dynamic>> buyQuote({required int tzs, required String acc}) async =>
-      (await _d.post('/buy/quote', data: {'amountTZS': tzs, 'accountNumber': acc})).data;
+  // FIX: added phone parameter — backend requires phoneNumber on first purchase
+  Future<Map<String, dynamic>> buyQuote({required int tzs, required String acc, required String phone}) async =>
+      (await _d.post('/buy/quote', data: {'amountTZS': tzs, 'accountNumber': acc, 'phoneNumber': phone})).data;
   Future<Map<String, dynamic>> buyPoll(String id) async => (await _d.get('/buy/quote/$id')).data;
   Future<Map<String, dynamic>> sendSats({required String qid, required String bolt11}) async =>
       (await _d.post('/buy/send-sats', data: {'quoteId': qid, 'bolt11': bolt11})).data;

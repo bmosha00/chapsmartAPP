@@ -10,13 +10,13 @@ class K {
   static const kNostr = 'nostr_pubkey';
   static const kAuth = 'auth_method';
 
-  // Product limits (API v7)
+  // Product limits (API v10.5)
   static const remitMin = 2500;
   static const remitMax = 1000000;
   static const airMin = 500;
   static const airMax = 15000;
   static const buyMin = 1000;
-  static const buyMax = 20000;
+  static const buyMax = 100000;  // FIX: was 20000, backend accepts up to 100,000 TZS
   static const merchMin = 2500;
   static const merchMax = 1000000;
 

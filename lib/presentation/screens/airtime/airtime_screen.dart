@@ -53,6 +53,7 @@ class _S extends State<AirtimeScreen> {
     finally { if (mounted) setState(() => _busy = false); }
   }
 
+  // ── FIX: detect completed/settled directly from remitStatus ──
   void _startPoll() {
     _poll?.cancel();
     int attempts = 0;
@@ -61,18 +62,26 @@ class _S extends State<AirtimeScreen> {
       attempts++;
       if (!mounted || attempts > 60) { t.cancel(); return; }
       try {
-        try {
-          final inv = await _api.remitStatus(iid);
-          final s = inv['status'] ?? 'pending';
-          if (s == 'settled' && _phase < 1) setState(() => _phase = 1);
-          if (s == 'expired') { t.cancel(); return; }
-        } catch (_) {}
-        final a = await _s.read(key: K.kAccount) ?? '';
-        final h = await _api.history(a);
-        final txs = (h['transactions'] as List? ?? []).cast<Map<String, dynamic>>();
-        final m = txs.where((tx) => tx['type'] == 'airtime' && (tx['invoiceId'] == iid || tx['btcpayInvoiceId'] == iid)).firstOrNull;
-        if (m != null && (m['status'] == 'completed' || m['status'] == 'settled')) {
-          t.cancel(); setState(() => _phase = 2); Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+        final inv = await _api.remitStatus(iid);
+        final s = (inv['status'] ?? 'pending').toString().toLowerCase();
+
+        // Phase 0 → 1: payment received
+        if ((s == 'settled' || s == 'paid' || s == 'payment_received') && _phase < 1) {
+          setState(() => _phase = 1);
+        }
+
+        // Phase → 2: airtime delivered — done!
+        if (s == 'completed' || s == 'delivered' || s == 'success') {
+          t.cancel();
+          setState(() => _phase = 2);
+          Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+          return;
+        }
+
+        // Invoice expired — stop polling
+        if (s == 'expired' || s == 'failed' || s == 'cancelled') {
+          t.cancel();
+          return;
         }
       } catch (_) {}
     });
