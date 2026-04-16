@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// ChapSmart Design System
-/// Inspired by: chapsmart.com dashboard (warm cream), Strike (clean),
-/// Revolut (playful cards), Stripe (precision typography)
 class C {
-  // ─── Warm cream palette (from dashboard.html) ──────────
+  // ─── Warm cream palette ──────────
   static const Color bg = Color(0xFFFDF6EC);
   static const Color bgWarm = Color(0xFFFAF0E2);
   static const Color card = Color(0xFFFFFFFF);
-  static const Color border = Color(0x1FB48C5A); // 12% warm brown
-  static const Color borderHover = Color(0x4DF7931A); // 30% btc
+  static const Color border = Color(0x1FB48C5A);
+  static const Color borderHover = Color(0x4DF7931A);
 
   // Brand
   static const Color btc = Color(0xFFF7931A);
@@ -23,9 +21,9 @@ class C {
   static const Color purple = Color(0xFF8B5CF6);
 
   // Text
-  static const Color t1 = Color(0xFF1A1207); // primary
-  static const Color t2 = Color(0xFF6B5A42); // secondary
-  static const Color t3 = Color(0xFF9C8B74); // muted
+  static const Color t1 = Color(0xFF1A1207);
+  static const Color t2 = Color(0xFF6B5A42);
+  static const Color t3 = Color(0xFF9C8B74);
 
   // Service accent colors
   static const Color send = btc;

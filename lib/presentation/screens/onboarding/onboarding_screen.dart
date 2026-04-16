@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/services/api_service.dart';
 import '../../widgets/app_widgets.dart';
+import '../terms/terms_screen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,6 +18,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTickerProviderStateMixin {
   bool _loading = false;
   bool _checking = true;
+  bool _termsAccepted = false;
   final _s = const FlutterSecureStorage();
   final _api = Api();
   late AnimationController _ac;
@@ -42,6 +44,7 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
   }
 
   Future<void> _create() async {
+    if (!_termsAccepted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tafadhali kubali masharti ya matumizi'), backgroundColor: C.red)); return; }
     setState(() => _loading = true);
     try {
       final r = await _api.createAccount();
@@ -78,16 +81,10 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
       return Scaffold(
         backgroundColor: C.bg,
         body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 64, height: 64, decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [C.btc, C.btcDark]),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [BoxShadow(color: C.btc.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
-          ), child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 32)),
+          ClipRRect(borderRadius: BorderRadius.circular(18),
+            child: Image.asset('assets/images/logo_small.png', width: 64, height: 64, fit: BoxFit.cover)),
           const SizedBox(height: 20),
-          RichText(text: const TextSpan(style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'DM Sans'), children: [
-            TextSpan(text: 'Chap', style: TextStyle(color: C.t1)),
-            TextSpan(text: 'Smart', style: TextStyle(color: C.btc)),
-          ])),
+          const Text('Chapsmart', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'DM Sans', color: C.t1)),
           const SizedBox(height: 16),
           const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: C.btc, strokeWidth: 2)),
           const SizedBox(height: 12),
@@ -104,30 +101,34 @@ class _OnboardingState extends ConsumerState<OnboardingScreen> with SingleTicker
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Column(children: [
               const Spacer(flex: 2),
-              Container(width: 72, height: 72, decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [C.btc, C.btcDark]),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: C.btc.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
-              ), child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 36)),
+              ClipRRect(borderRadius: BorderRadius.circular(20),
+                child: Image.asset('assets/images/logo_small.png', width: 72, height: 72, fit: BoxFit.cover)),
               const SizedBox(height: 28),
-              RichText(text: const TextSpan(style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, fontFamily: 'DM Sans'), children: [
-                TextSpan(text: 'Chap', style: TextStyle(color: C.t1)),
-                TextSpan(text: 'Smart', style: TextStyle(color: C.btc)),
-              ])),
+              const Text('Chapsmart', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, fontFamily: 'DM Sans', color: C.t1)),
               const SizedBox(height: 8),
               const Text('Bitcoin \u2194 Mobile Money', style: TextStyle(fontSize: 15, color: C.t3)),
               const SizedBox(height: 40),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 _Svc(Icons.send_rounded, 'Send', C.btc),
-                const SizedBox(width: 28),
+                const SizedBox(width: 36),
                 _Svc(Icons.phone_android_rounded, 'Airtime', C.blue),
-                const SizedBox(width: 28),
+                const SizedBox(width: 36),
                 _Svc(Icons.currency_bitcoin_rounded, 'Buy BTC', C.green),
-                const SizedBox(width: 28),
-                _Svc(Icons.storefront_rounded, 'Pay', C.purple),
               ]),
               const Spacer(flex: 3),
-              Btn(label: 'Get started', onTap: _create, loading: _loading),
+              GestureDetector(onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+                child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: _termsAccepted ? C.green.withOpacity(0.04) : C.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: _termsAccepted ? C.green.withOpacity(0.2) : C.border)),
+                  child: Row(children: [
+                    Container(width: 22, height: 22, decoration: BoxDecoration(color: _termsAccepted ? C.green : Colors.transparent, borderRadius: BorderRadius.circular(6), border: Border.all(color: _termsAccepted ? C.green : C.t3, width: 1.5)),
+                      child: _termsAccepted ? const Icon(Icons.check_rounded, color: Colors.white, size: 14) : null),
+                    const SizedBox(width: 10),
+                    Expanded(child: GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsScreen())),
+                      child: RichText(text: const TextSpan(style: TextStyle(fontSize: 12, color: C.t2, height: 1.4, fontFamily: 'DM Sans'), children: [
+                        TextSpan(text: 'Nakubali '), TextSpan(text: 'Masharti ya Matumizi', style: TextStyle(color: C.btc, fontWeight: FontWeight.w600, decoration: TextDecoration.underline))]))))
+                  ]))),
+              const SizedBox(height: 14),
+              Btn(label: 'Get started', onTap: _create, loading: _loading, enabled: _termsAccepted),
               const SizedBox(height: 10),
               BtnSecondary(label: 'I have an account', onTap: () => context.go('/login')),
               const SizedBox(height: 10),

@@ -33,7 +33,7 @@ class _LoginState extends State<LoginScreen> {
       await _s.write(key: K.kAuth, value: 'account');
       if (mounted) context.go('/home');
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login failed. Check your number.'), backgroundColor: C.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed. Check your number.'), backgroundColor: C.red));
     } finally { if (mounted) setState(() => _loading = false); }
   }
 
@@ -57,9 +57,9 @@ class _LoginState extends State<LoginScreen> {
           const SizedBox(height: 12),
           BackBtn(onTap: () => context.go('/')),
           const SizedBox(height: 32),
-          const Text('Welcome back', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.5)),
+          Text('Welcome back', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: C.t1, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          const Text('Enter your account number', style: TextStyle(fontSize: 14, color: C.t3)),
+          Text('Enter your account number', style: TextStyle(fontSize: 14, color: C.t3)),
           const SizedBox(height: 28),
           Container(
             height: 56, width: double.infinity,
@@ -75,7 +75,7 @@ class _LoginState extends State<LoginScreen> {
           const SizedBox(height: 12),
           Btn(label: 'Sign in', onTap: ok ? _login : null, loading: _loading, enabled: ok),
           const SizedBox(height: 12),
-          Center(child: GestureDetector(onTap: () => context.go('/nostr'), child: const Text('Use Nostr instead', style: TextStyle(fontSize: 13, color: C.t3)))),
+          Center(child: GestureDetector(onTap: () => context.go('/nostr'), child: Text('Use Nostr instead', style: TextStyle(fontSize: 13, color: C.t3)))),
           const SizedBox(height: 16),
         ]),
       )),
@@ -96,10 +96,10 @@ class _Keypad extends StatelessWidget {
       Widget key(String d) => GestureDetector(
         onTap: () => onDigit(d),
         child: Container(width: kw, height: kh, decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
-          child: Center(child: Text(d, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: C.t1)))),
+          child: Center(child: Text(d, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: C.t1)))),
       );
       Widget empty() => SizedBox(width: kw, height: kh);
-      Widget del() => GestureDetector(onTap: onDelete, child: SizedBox(width: kw, height: kh, child: const Center(child: Icon(Icons.backspace_outlined, color: C.t3, size: 22))));
+      Widget del() => GestureDetector(onTap: onDelete, child: SizedBox(width: kw, height: kh, child: Center(child: Icon(Icons.backspace_outlined, color: C.t3, size: 22))));
       return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [key('1'), SizedBox(width: gap), key('2'), SizedBox(width: gap), key('3')]),
         SizedBox(height: gap),

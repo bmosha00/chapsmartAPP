@@ -19,7 +19,7 @@ class _NostrState extends State<NostrLoginScreen> {
   bool _loading = false, _signup = false;
 
   Future<void> _go() async {
-    if (_ctrl.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paste NIP-98 event'), backgroundColor: C.red)); return; }
+    if (_ctrl.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Paste NIP-98 event'), backgroundColor: C.red)); return; }
     setState(() => _loading = true);
     try {
       final r = _signup ? await _api.nostrSignup({'raw': _ctrl.text.trim()}) : await _api.nostrLogin({'raw': _ctrl.text.trim()});
@@ -53,9 +53,9 @@ class _NostrState extends State<NostrLoginScreen> {
           const SizedBox(height: 32),
           Container(width: 48, height: 48, decoration: BoxDecoration(color: C.purple.withOpacity(0.08), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.key_rounded, color: C.purple, size: 22)),
           const SizedBox(height: 16),
-          const Text('Nostr identity', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: C.t1)),
+          Text('Nostr identity', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: C.t1)),
           const SizedBox(height: 4),
-          const Text('Authenticate with your Nostr keys', style: TextStyle(fontSize: 14, color: C.t3)),
+          Text('Authenticate with your Nostr keys', style: TextStyle(fontSize: 14, color: C.t3)),
           const SizedBox(height: 24),
           Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(10)),
             child: Row(children: [
@@ -65,13 +65,13 @@ class _NostrState extends State<NostrLoginScreen> {
           const SizedBox(height: 16),
           Expanded(child: TextFormField(
             controller: _ctrl, maxLines: null, expands: true, textAlignVertical: TextAlignVertical.top,
-            style: const TextStyle(fontSize: 13, fontFamily: 'SpaceMono', color: C.t1, height: 1.5),
+            style: TextStyle(fontSize: 13, fontFamily: 'SpaceMono', color: C.t1, height: 1.5),
             decoration: const InputDecoration(hintText: 'Paste NIP-98 signed event JSON...', alignLabelWithHint: true),
           )),
           const SizedBox(height: 16),
           Btn(label: _signup ? 'Create account' : 'Sign in', onTap: _go, loading: _loading),
           const SizedBox(height: 12),
-          Center(child: GestureDetector(onTap: () => context.go('/login'), child: const Text('Use account number', style: TextStyle(fontSize: 13, color: C.t3)))),
+          Center(child: GestureDetector(onTap: () => context.go('/login'), child: Text('Use account number', style: TextStyle(fontSize: 13, color: C.t3)))),
           const SizedBox(height: 16),
         ]),
       )),

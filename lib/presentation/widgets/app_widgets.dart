@@ -30,7 +30,7 @@ class BtnSecondary extends StatelessWidget {
         decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
         child: Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[Icon(icon, color: C.t2, size: 16), const SizedBox(width: 8)],
-          Text(label, style: const TextStyle(color: C.t2, fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(color: C.t2, fontSize: 15, fontWeight: FontWeight.w600)),
         ]))));
   }
 }
@@ -43,10 +43,10 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border), boxShadow: [C.shadow]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.t3, letterSpacing: 0.5)),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.t3, letterSpacing: 0.5)),
           const SizedBox(height: 6),
           Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: valueColor ?? C.t1)),
-          if (sub != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(sub!, style: const TextStyle(fontSize: 11, color: C.t3))),
+          if (sub != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(sub!, style: TextStyle(fontSize: 11, color: C.t3))),
         ]));
   }
 }
@@ -62,7 +62,7 @@ class TierBadge extends StatelessWidget {
         decoration: BoxDecoration(color: C.btc.withOpacity(0.08), borderRadius: BorderRadius.circular(99), border: Border.all(color: C.btc.withOpacity(0.15))),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.workspace_premium_rounded, size: 12, color: _c), const SizedBox(width: 4),
-          Text(tier.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btcDark)),
+          Text(tier.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btcDark)),
         ]));
   }
 }
@@ -80,11 +80,11 @@ class TxTile extends StatelessWidget {
           Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 16)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.t1)),
-            Text(detail, style: const TextStyle(fontSize: 11, color: C.t3), overflow: TextOverflow.ellipsis),
+            Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.t1)),
+            Text(detail, style: TextStyle(fontSize: 11, color: C.t3), overflow: TextOverflow.ellipsis),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(amount, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.t1)),
+            Text(amount, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.t1)),
             const SizedBox(height: 2),
             Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2), decoration: BoxDecoration(color: _sc.withOpacity(0.08), borderRadius: BorderRadius.circular(99)),
                 child: Text(status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _sc))),
@@ -100,15 +100,15 @@ class CopyField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-        onTap: () { Clipboard.setData(ClipboardData(text: value)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Copied'), backgroundColor: C.t1, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), duration: const Duration(seconds: 1))); },
+        onTap: () { Clipboard.setData(ClipboardData(text: value)); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied'), backgroundColor: C.t1, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), duration: const Duration(seconds: 1))); },
         child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
             child: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: C.t3)),
+                Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: C.t3)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 11, fontFamily: 'SpaceMono', color: C.t1), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(value, style: TextStyle(fontSize: 11, fontFamily: 'SpaceMono', color: C.t1), maxLines: 1, overflow: TextOverflow.ellipsis),
               ])),
-              const Icon(Icons.copy_rounded, color: C.t3, size: 14),
+              Icon(Icons.copy_rounded, color: C.t3, size: 14),
             ])));
   }
 }
@@ -136,7 +136,7 @@ class BackBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(onTap: onTap ?? () => Navigator.of(context).pop(),
         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: C.card, shape: BoxShape.circle, border: Border.all(color: C.border)),
-            child: const Icon(Icons.arrow_back_rounded, color: C.t2, size: 18)));
+            child: Icon(Icons.arrow_back_rounded, color: C.t2, size: 18)));
   }
 }
 
@@ -147,8 +147,8 @@ class SecHead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.t1)),
-      if (action != null) GestureDetector(onTap: onAction, child: Text(action!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.btc))),
+      Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.t1)),
+      if (action != null) GestureDetector(onTap: onAction, child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.btc))),
     ]);
   }
 }
@@ -278,16 +278,16 @@ class SuccessSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-      decoration: const BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 40, height: 4, decoration: BoxDecoration(color: C.border, borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 28),
         Container(width: 72, height: 72, decoration: BoxDecoration(color: color.withOpacity(0.08), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 36)),
         const SizedBox(height: 20),
-        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: C.t1), textAlign: TextAlign.center),
+        Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: C.t1), textAlign: TextAlign.center),
         const SizedBox(height: 8),
-        Text(message, style: const TextStyle(fontSize: 14, color: C.t3, height: 1.5), textAlign: TextAlign.center),
+        Text(message, style: TextStyle(fontSize: 14, color: C.t3, height: 1.5), textAlign: TextAlign.center),
         if (detail != null) ...[
           const SizedBox(height: 12),
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),

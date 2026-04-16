@@ -19,8 +19,12 @@ class Api {
         final appCheckToken = await FirebaseAppCheck.instance.getToken();
         if (appCheckToken != null) {
           o.headers['X-Firebase-AppCheck'] = appCheckToken;
+        } else {
+          print('[APP CHECK] getToken() returned null');
         }
-      } catch (_) {}
+      } catch (e) {
+        print('[APP CHECK] getToken() error: $e');
+      }
       // Firebase ID Token
       try {
         final user = FirebaseAuth.instance.currentUser;
@@ -91,7 +95,6 @@ class Api {
   Future<Map<String, dynamic>> airGenerate(String qid) async => (await _d.post('/airtime/generate', data: {'quoteId': qid})).data;
 
   // ── Buy Sats ──
-  // FIX: added phone parameter — backend requires phoneNumber on first purchase
   Future<Map<String, dynamic>> buyQuote({required int tzs, required String acc, required String phone}) async =>
       (await _d.post('/buy/quote', data: {'amountTZS': tzs, 'accountNumber': acc, 'phoneNumber': phone})).data;
   Future<Map<String, dynamic>> buyPoll(String id) async => (await _d.get('/buy/quote/$id')).data;

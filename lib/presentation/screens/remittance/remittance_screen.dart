@@ -94,19 +94,19 @@ class _S extends State<RemittanceScreen> {
 
   Widget _buildForm() {
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _fk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
       TextFormField(controller: _amt, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono'), decoration: const InputDecoration(prefixText: 'TZS ', hintText: '5000'),
         validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); return (n == null || n < K.remitMin || n > K.remitMax) ? 'Amount out of range' : null; }),
-      const SizedBox(height: 4), Text('Min ${Fmt.compact(K.remitMin)} — Max ${Fmt.compact(K.remitMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 4), Text('Min ${Fmt.compact(K.remitMin)} — Max ${Fmt.compact(K.remitMax)} TZS', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 16),
-      const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
       TextFormField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: '0741000000'), validator: (v) => (v == null || v.trim().length < 9) ? 'Valid M-Pesa number' : null),
-      const SizedBox(height: 4), const Text('Vodacom M-Pesa numbers only', style: TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 4), Text('Vodacom M-Pesa numbers only', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 16),
-      const Text('Recipient Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      Text('Recipient Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
       TextFormField(controller: _name, decoration: const InputDecoration(hintText: 'Full name (first and last)'),
         validator: (v) => (v == null || v.trim().split(' ').where((w) => w.length >= 2).length < 2) ? 'First + last name required' : null),
-      const SizedBox(height: 4), const Text('Must include first and last name', style: TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 4), Text('Must include first and last name', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 28), Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
     ])));
   }
@@ -116,7 +116,7 @@ class _S extends State<RemittanceScreen> {
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
       Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
         child: Column(children: [
-          _QR('Recipient gets', Fmt.tzs(_q!['recipientReceives']?['tzs'] ?? 0), big: true), const Divider(height: 20, color: C.border),
+          _QR('Recipient gets', Fmt.tzs(_q!['recipientReceives']?['tzs'] ?? 0), big: true), Divider(height: 20, color: C.border),
           _QR('You pay', Fmt.sats(yp['sats'] ?? 0), mono: true),
           _QR('Fee', '${Fmt.pct((yp['feePercent'] ?? 0).toDouble())} (${yp['feeSats'] ?? 0} sats)'),
           _QR('Tier', _q!['userTier'] ?? 'BRONZE'), _QR('To', _phone.text.trim()),
@@ -136,7 +136,7 @@ class _S extends State<RemittanceScreen> {
         child: Column(children: [
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: QrImageView(data: _inv!['bolt11'] ?? '', version: QrVersions.auto, size: 200)),
           const SizedBox(height: 16),
-          Text(Fmt.sats(_inv!['youPay']?['sats'] ?? 0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
+          Text(Fmt.sats(_inv!['youPay']?['sats'] ?? 0), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
         ])),
       const SizedBox(height: 12), CopyField(label: 'BOLT11 Invoice', value: _inv!['bolt11'] ?? ''),
       const SizedBox(height: 20),
@@ -150,7 +150,7 @@ class _S extends State<RemittanceScreen> {
   }
 
   Widget _QR(String l, String v, {bool big = false, bool mono = false}) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
+    Text(l, style: TextStyle(fontSize: 13, color: C.t2)),
     Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: big ? C.btc : C.t1)),
   ]));
 }

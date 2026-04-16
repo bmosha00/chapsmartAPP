@@ -9,7 +9,6 @@ import '../../widgets/app_widgets.dart';
 import '../remittance/remittance_screen.dart';
 import '../airtime/airtime_screen.dart';
 import '../buysats/buysats_screen.dart';
-import '../merchant/merchant_screen.dart';
 import '../history/history_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -106,17 +105,10 @@ class _DashboardState extends State<_Dashboard> {
           // FIX 5: Logo + brand
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Row(children: [
-              // ChapSmart logo
-              Container(width: 32, height: 32, decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [C.btc, C.btcDark]),
-                borderRadius: BorderRadius.circular(9),
-                boxShadow: [BoxShadow(color: C.btc.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 2))],
-              ), child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 17)),
+              ClipRRect(borderRadius: BorderRadius.circular(9),
+                child: Image.asset('assets/images/logo_small.png', width: 32, height: 32, fit: BoxFit.cover)),
               const SizedBox(width: 10),
-              RichText(text: const TextSpan(style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, fontFamily: 'DM Sans'), children: [
-                TextSpan(text: 'Chap', style: TextStyle(color: C.t1)),
-                TextSpan(text: 'Smart', style: TextStyle(color: C.btc)),
-              ])),
+              const Text('Chapsmart', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, fontFamily: 'DM Sans', color: C.t1)),
             ]),
             TierBadge(tier: tier),
           ]),
@@ -162,16 +154,7 @@ class _DashboardState extends State<_Dashboard> {
             const SizedBox(width: 8),
             Expanded(child: _QA(Icons.currency_bitcoin_rounded, 'Buy Sats', 'M-Pesa → BTC', C.green, () => _push(const BuySatsScreen()))),
           ]),
-          const SizedBox(height: 8),
-          GestureDetector(onTap: () => _push(const MerchantScreen()), child: Container(
-            padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border), boxShadow: [C.shadow]),
-            child: Row(children: [
-              Container(width: 40, height: 40, decoration: BoxDecoration(color: C.purple.withOpacity(0.08), borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.storefront_rounded, color: C.purple, size: 18)),
-              const SizedBox(width: 12),
-              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Pay Merchant', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), Text('BTC → Shop M-Pesa', style: TextStyle(fontSize: 11, color: C.t3))])),
-              const Icon(Icons.chevron_right_rounded, color: C.t3, size: 18),
-            ]),
-          )),
+
           const SizedBox(height: 28),
 
           // FIX 1: Recent — show individual tx amount, not cumulative
@@ -183,12 +166,12 @@ class _DashboardState extends State<_Dashboard> {
           else ..._recentTx.map((t) {
             final type = t['type'] ?? 'remittance';
             final status = t['status'] ?? t['payoutStatus'] ?? 'pending';
-            final name = t['recipientName'] ?? t['merchantName'] ?? '';
+            final name = t['recipientName'] ?? '';
             final phone = t['phoneNumber'] ?? '';
             // FIX 1: Use individual transaction amount, not cumulative
             final txAmount = t['amountTZS'] ?? t['amount'] ?? 0;
             IconData ic; Color cl; String lbl;
-            switch (type) { case 'airtime': ic = Icons.phone_android_rounded; cl = C.blue; lbl = 'Airtime'; break; case 'buy-sats': ic = Icons.currency_bitcoin_rounded; cl = C.green; lbl = 'Buy Sats'; break; case 'merchant_payment': ic = Icons.storefront_rounded; cl = C.purple; lbl = 'Merchant'; break; default: ic = Icons.send_rounded; cl = C.btc; lbl = 'Remittance'; }
+            switch (type) { case 'airtime': ic = Icons.phone_android_rounded; cl = C.blue; lbl = 'Airtime'; break; case 'buy-sats': ic = Icons.currency_bitcoin_rounded; cl = C.green; lbl = 'Buy Sats'; break; default: ic = Icons.send_rounded; cl = C.btc; lbl = 'Remittance'; }
             return TxTile(title: name.isNotEmpty ? name : lbl, detail: phone.isNotEmpty ? phone : type, amount: '${Fmt.compact(txAmount)} TZS', time: '', status: status, icon: ic, color: cl);
           }),
         ]),

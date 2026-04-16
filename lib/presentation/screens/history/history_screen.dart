@@ -38,7 +38,7 @@ class _HistoryState extends State<HistoryScreen> {
     return _txs.where((t) {
       final type = t['type'] ?? '';
       final status = t['status'] ?? t['payoutStatus'] ?? '';
-      if (_filter == 'remittance' || _filter == 'airtime' || _filter == 'buy-sats' || _filter == 'merchant_payment') return type == _filter;
+      if (_filter == 'remittance' || _filter == 'airtime' || _filter == 'buy-sats') return type == _filter;
       if (_filter == 'settled') return status == 'settled' || status == 'SUCCESS' || status == 'completed';
       if (_filter == 'pending') return status == 'pending';
       return true;
@@ -49,7 +49,6 @@ class _HistoryState extends State<HistoryScreen> {
     switch (type) {
       case 'airtime': return Icons.phone_android_rounded;
       case 'buy-sats': return Icons.currency_bitcoin_rounded;
-      case 'merchant_payment': return Icons.storefront_rounded;
       default: return Icons.send_rounded;
     }
   }
@@ -58,7 +57,6 @@ class _HistoryState extends State<HistoryScreen> {
     switch (type) {
       case 'airtime': return C.blue;
       case 'buy-sats': return C.green;
-      case 'merchant_payment': return C.purple;
       default: return C.btc;
     }
   }
@@ -67,7 +65,6 @@ class _HistoryState extends State<HistoryScreen> {
     switch (type) {
       case 'airtime': return 'Airtime';
       case 'buy-sats': return 'Buy Sats';
-      case 'merchant_payment': return 'Merchant';
       default: return 'Remittance';
     }
   }
@@ -87,7 +84,6 @@ class _HistoryState extends State<HistoryScreen> {
             _Chip('Remittance', 'remittance', C.btc),
             _Chip('Airtime', 'airtime', C.blue),
             _Chip('Buy Sats', 'buy-sats', C.green),
-            _Chip('Merchant', 'merchant_payment', C.purple),
           ])),
         ),
         Expanded(child: _buildBody()),
@@ -141,7 +137,7 @@ class _HistoryState extends State<HistoryScreen> {
           final t = list[i];
           final type = t['type'] ?? 'remittance';
           final status = t['status'] ?? t['payoutStatus'] ?? 'pending';
-          final name = t['recipientName'] ?? t['merchantName'] ?? '';
+          final name = t['recipientName'] ?? '';
           final phone = t['phoneNumber'] ?? '';
           final amount = t['amountTZS'] ?? t['amount'] ?? 0;
           return TxTile(
