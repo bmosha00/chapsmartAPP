@@ -61,18 +61,26 @@ class _S extends State<AirtimeScreen> {
       attempts++;
       if (!mounted || attempts > 60) { t.cancel(); return; }
       try {
-        try {
-          final inv = await _api.remitStatus(iid);
-          final s = inv['status'] ?? 'pending';
-          if (s == 'settled' && _phase < 1) setState(() => _phase = 1);
-          if (s == 'expired') { t.cancel(); return; }
-        } catch (_) {}
-        final a = await _s.read(key: K.kAccount) ?? '';
-        final h = await _api.history(a);
-        final txs = (h['transactions'] as List? ?? []).cast<Map<String, dynamic>>();
-        final m = txs.where((tx) => tx['type'] == 'airtime' && (tx['invoiceId'] == iid || tx['btcpayInvoiceId'] == iid)).firstOrNull;
-        if (m != null && (m['status'] == 'completed' || m['status'] == 'settled')) {
-          t.cancel(); setState(() => _phase = 2); Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+        final inv = await _api.remitStatus(iid);
+        final s = (inv['status'] ?? 'pending').toString().toLowerCase();
+
+        // Phase 0 → 1: payment received
+        if ((s == 'settled' || s == 'paid' || s == 'payment_received') && _phase < 1) {
+          setState(() => _phase = 1);
+        }
+
+        // Phase → 2: airtime delivered — done!
+        if (s == 'completed' || s == 'delivered' || s == 'success') {
+          t.cancel();
+          setState(() => _phase = 2);
+          Future.delayed(const Duration(milliseconds: 500), _showSuccess);
+          return;
+        }
+
+        // Invoice expired — stop polling
+        if (s == 'expired' || s == 'failed' || s == 'cancelled') {
+          t.cancel();
+          return;
         }
       } catch (_) {}
     });
@@ -106,19 +114,19 @@ class _S extends State<AirtimeScreen> {
 
   Widget _buildForm() {
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _fk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      const Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
       TextFormField(controller: _amt, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, fontFamily: 'SpaceMono'), decoration: const InputDecoration(prefixText: 'TZS ', hintText: '1000'),
         validator: (v) { final n = int.tryParse(v?.replaceAll(',', '') ?? ''); return (n == null || n < K.airMin || n > K.airMax) ? 'Out of range' : null; }),
-      const SizedBox(height: 4), Text('Min ${K.airMin} — Max ${Fmt.compact(K.airMax)} TZS', style: TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 4), Text('Min ${K.airMin} — Max ${Fmt.compact(K.airMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 12),
       Wrap(spacing: 8, runSpacing: 8, children: _quick.map((a) => GestureDetector(onTap: () => setState(() => _amt.text = a.toString()),
         child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(color: _amt.text == a.toString() ? C.blue.withOpacity(0.08) : C.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: _amt.text == a.toString() ? C.blue.withOpacity(0.3) : C.border)),
           child: Text('${Fmt.compact(a)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _amt.text == a.toString() ? C.blue : C.t2))))).toList()),
       const SizedBox(height: 16),
-      Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
+      const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)), const SizedBox(height: 6),
       TextFormField(controller: _phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(hintText: '0741000000'), validator: (v) => (v == null || v.trim().length < 9) ? 'Valid number' : null),
-      const SizedBox(height: 4), Text('Any Tanzanian mobile number', style: TextStyle(fontSize: 11, color: C.t3)),
+      const SizedBox(height: 4), const Text('Any Tanzanian mobile number', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 28), Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
     ])));
   }
@@ -128,7 +136,7 @@ class _S extends State<AirtimeScreen> {
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Column(children: [
       Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
         child: Column(children: [
-          _QR('Airtime', Fmt.tzs(_q!['recipientReceives']?['tzs'] ?? 0), big: true), Divider(height: 20, color: C.border),
+          _QR('Airtime', Fmt.tzs(_q!['recipientReceives']?['tzs'] ?? 0), big: true), const Divider(height: 20, color: C.border),
           _QR('You pay', Fmt.sats(yp['sats'] ?? 0), mono: true),
           _QR('Fee', Fmt.pct((yp['feePercent'] ?? 0).toDouble())), _QR('To', _phone.text.trim()),
         ])),
@@ -147,7 +155,7 @@ class _S extends State<AirtimeScreen> {
         child: Column(children: [
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: QrImageView(data: _inv!['bolt11'] ?? '', version: QrVersions.auto, size: 200)),
           const SizedBox(height: 16),
-          Text(Fmt.sats(_inv!['youPay']?['sats'] ?? 0), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
+          Text(Fmt.sats(_inv!['youPay']?['sats'] ?? 0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, fontFamily: 'SpaceMono', color: C.btc)),
         ])),
       const SizedBox(height: 12), CopyField(label: 'BOLT11', value: _inv!['bolt11'] ?? ''),
       const SizedBox(height: 20),
@@ -160,7 +168,7 @@ class _S extends State<AirtimeScreen> {
   }
 
   Widget _QR(String l, String v, {bool big = false, bool mono = false}) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(l, style: TextStyle(fontSize: 13, color: C.t2)),
+    Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
     Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: big ? C.btc : C.t1)),
   ]));
 }

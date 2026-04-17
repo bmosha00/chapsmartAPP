@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
@@ -59,7 +60,7 @@ class _S extends State<BuySatsScreen> {
     // Validate phone
     final phoneRaw = _phone.text.trim();
     if (!_phoneLocked && (phoneRaw.isEmpty || phoneRaw.length < 9)) {
-      _err('Ingiza namba ya M-Pesa');
+      _err('Ingiza namba yako ya simu');
       return;
     }
 
@@ -94,18 +95,22 @@ class _S extends State<BuySatsScreen> {
 
       setState(() { _q = r; _step = _Step.quoteAndBolt11; });
     } catch (e) {
-      final msg = e.toString();
-      // Security blocks — Gate 2 phone binding, Gate 3 device limit
+      // Extract actual error from DioException response
+      String msg = 'Quote failed';
+      int? code;
+      if (e is DioException && e.response?.data is Map) {
+        msg = (e.response!.data['error'] ?? e.response!.data['message'] ?? msg).toString();
+        code = e.response?.statusCode;
+      }
       if (msg.contains('device') || msg.contains('linked to a different') ||
           msg.contains('already linked') || msg.contains('disabled') ||
-          msg.contains('2 accounts')) {
+          msg.contains('2 accounts') || msg.contains('bound to') ||
+          msg.contains('blocked')) {
         _showBlocked(msg);
-      } else if (msg.contains('403')) {
-        _err('Buy sats is only available in Tanzania');
-      } else if (msg.contains('429')) {
+      } else if (code == 429) {
         _err('Daily limit reached. Try again tomorrow');
       } else {
-        _err('Quote failed');
+        _err(msg);
       }
     }
     finally { if (mounted) setState(() => _busy = false); }
@@ -146,14 +151,13 @@ class _S extends State<BuySatsScreen> {
         setState(() => _busy = false);
       }
     } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('409')) {
-        _err('This invoice was already used');
-      } else if (msg.contains('400')) {
-        _err('Invoice amount does not match quote');
-      } else {
-        _err('Failed \u2014 check your BOLT11 invoice');
+      String msg = 'Failed — check your BOLT11 invoice';
+      int? code;
+      if (e is DioException && e.response?.data is Map) {
+        msg = (e.response!.data['error'] ?? e.response!.data['message'] ?? msg).toString();
+        code = e.response?.statusCode;
       }
+      _err(msg);
       setState(() => _busy = false);
     }
   }
@@ -205,16 +209,16 @@ class _S extends State<BuySatsScreen> {
   void _showBlocked(String error) {
     showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (_) => Container(
       padding: const EdgeInsets.fromLTRB(28, 12, 28, 32),
-      decoration: BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: const BoxDecoration(color: C.card, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 40, height: 4, decoration: BoxDecoration(color: C.border, borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 24),
         Container(width: 64, height: 64, decoration: BoxDecoration(color: C.red.withOpacity(0.08), shape: BoxShape.circle),
           child: const Icon(Icons.shield_rounded, color: C.red, size: 32)),
         const SizedBox(height: 16),
-        Text('Imezuiliwa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.red)),
+        const Text('Imezuiliwa', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.red)),
         const SizedBox(height: 8),
-        Text(error, style: TextStyle(fontSize: 14, color: C.t2, height: 1.6), textAlign: TextAlign.center),
+        Text(error, style: const TextStyle(fontSize: 14, color: C.t2, height: 1.6), textAlign: TextAlign.center),
         const SizedBox(height: 24),
         BtnSecondary(label: 'Funga', onTap: () => Navigator.pop(context)),
       ]),
@@ -253,7 +257,7 @@ class _S extends State<BuySatsScreen> {
   Widget _buildStep1() {
     return SingleChildScrollView(padding: const EdgeInsets.all(22), child: Form(key: _fk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // Amount
-      Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
+      const Text('Amount (TZS)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
       const SizedBox(height: 6),
       TextFormField(
         controller: _amt,
@@ -266,11 +270,11 @@ class _S extends State<BuySatsScreen> {
         },
       ),
       const SizedBox(height: 4),
-      Text('Min ${Fmt.compact(K.buyMin)} \u2014 Max ${Fmt.compact(K.buyMax)} TZS', style: TextStyle(fontSize: 11, color: C.t3)),
+      Text('Min ${Fmt.compact(K.buyMin)} \u2014 Max ${Fmt.compact(K.buyMax)} TZS', style: const TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 20),
 
       // Phone Number
-      Text('Phone Number (M-Pesa)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
+      const Text('Phone Number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
       const SizedBox(height: 6),
       TextFormField(
         controller: _phone,
@@ -288,10 +292,10 @@ class _S extends State<BuySatsScreen> {
         Row(children: [
           Icon(Icons.lock_rounded, color: C.green, size: 12),
           const SizedBox(width: 4),
-          Text('Namba hii imefungwa na akaunti yako', style: TextStyle(fontSize: 11, color: C.green)),
+          const Text('Namba hii imefungwa na akaunti yako', style: TextStyle(fontSize: 11, color: C.green)),
         ])
       else
-        Text('Namba yako ya M-Pesa \u2014 utapokea USSD prompt', style: TextStyle(fontSize: 11, color: C.t3)),
+        const Text('Namba yako ya simu \u2014 utapokea USSD prompt', style: TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 28),
 
       Btn(label: 'Get Quote', onTap: _getQuote, loading: _busy, icon: Icons.arrow_forward_rounded),
@@ -309,15 +313,15 @@ class _S extends State<BuySatsScreen> {
       Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
         child: Column(children: [
           _QR('You pay', '${Fmt.compact(tzs)} TZS', big: true),
-          Divider(height: 20, color: C.border),
+          const Divider(height: 20, color: C.border),
           _QR('You receive', '$sats sats', mono: true, color: C.green),
           _QR('BTC Price', '\$${(btcPrice is num ? btcPrice : 0).toStringAsFixed(0)}'),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Phone', style: TextStyle(fontSize: 13, color: C.t2)),
+            const Text('Phone', style: TextStyle(fontSize: 13, color: C.t2)),
             Row(children: [
               const Icon(Icons.lock_rounded, color: C.green, size: 11),
               const SizedBox(width: 4),
-              Text(_phone.text.trim(), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.t1)),
+              Text(_phone.text.trim(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.t1)),
             ]),
           ]),
           const SizedBox(height: 4),
@@ -332,7 +336,7 @@ class _S extends State<BuySatsScreen> {
           Row(children: [
             Icon(Icons.phone_android_rounded, color: C.green, size: 13),
             const SizedBox(width: 8),
-            Text('Jinsi inavyofanya kazi', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.t1)),
+            const Text('Jinsi inavyofanya kazi', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.t1)),
           ]),
           const SizedBox(height: 8),
           Text(
@@ -344,7 +348,7 @@ class _S extends State<BuySatsScreen> {
       const SizedBox(height: 14),
 
       // BOLT11 input
-      Text('Your BOLT11 Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
+      const Text('Your BOLT11 Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.t2)),
       const SizedBox(height: 6),
       TextFormField(
         controller: _bolt,
@@ -353,7 +357,7 @@ class _S extends State<BuySatsScreen> {
         decoration: const InputDecoration(hintText: 'lnbc...'),
       ),
       const SizedBox(height: 4),
-      Text('Generate in your Lightning wallet for exactly $sats sats', style: TextStyle(fontSize: 11, color: C.t3)),
+      Text('Generate in your Lightning wallet for exactly $sats sats', style: const TextStyle(fontSize: 11, color: C.t3)),
       const SizedBox(height: 24),
 
       // Buttons
@@ -400,19 +404,19 @@ class _S extends State<BuySatsScreen> {
       const SizedBox(height: 6),
 
       if (_statusIcon == 'done' && _satsSent != null)
-        Text('${_satsSent!.toLocaleString()} sats zimeingia kwenye wallet yako', style: TextStyle(fontSize: 14, color: C.t2))
+        Text('${_satsSent!.toLocaleString()} sats zimeingia kwenye wallet yako', style: const TextStyle(fontSize: 14, color: C.t2))
       else if (_statusIcon == 'waiting')
         Column(children: [
-          Text('USSD prompt imetumwa kwa $phoneDisplay', style: TextStyle(fontSize: 13, color: C.t2)),
+          Text('USSD prompt imetumwa kwa $phoneDisplay', style: const TextStyle(fontSize: 13, color: C.t2)),
           const SizedBox(height: 8),
-          Text('Bonyeza 1 kuthibitisha malipo ya ${Fmt.compact(amt)} TZS', style: TextStyle(fontSize: 12, color: C.t3)),
+          Text('Bonyeza 1 kuthibitisha malipo ya ${Fmt.compact(amt)} TZS', style: const TextStyle(fontSize: 12, color: C.t3)),
         ])
       else if (_statusIcon == 'received')
-        Text('Inatuma sats kwenye wallet yako...', style: TextStyle(fontSize: 13, color: C.t2))
+        const Text('Inatuma sats kwenye wallet yako...', style: TextStyle(fontSize: 13, color: C.t2))
       else if (_statusIcon == 'failed')
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(_statusText, style: TextStyle(fontSize: 13, color: C.t2, height: 1.5), textAlign: TextAlign.center),
+          child: Text(_statusText, style: const TextStyle(fontSize: 13, color: C.t2, height: 1.5), textAlign: TextAlign.center),
         ),
 
       const SizedBox(height: 24),
@@ -425,7 +429,7 @@ class _S extends State<BuySatsScreen> {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: C.btc)),
             const SizedBox(width: 8),
-            Text(_statusText, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btc)),
+            Text(_statusText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.btc)),
           ]),
         )
       else if (_statusIcon == 'done')
@@ -461,7 +465,7 @@ class _S extends State<BuySatsScreen> {
   }
 
   Widget _QR(String l, String v, {bool big = false, bool mono = false, Color? color}) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(l, style: TextStyle(fontSize: 13, color: C.t2)),
+    Text(l, style: const TextStyle(fontSize: 13, color: C.t2)),
     Flexible(child: Text(v, style: TextStyle(fontSize: big ? 18 : 14, fontWeight: FontWeight.w600, fontFamily: mono ? 'SpaceMono' : null, color: color ?? (big ? C.btc : C.t1)), textAlign: TextAlign.right)),
   ]));
 }
