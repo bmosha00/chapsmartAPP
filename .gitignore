@@ -46,3 +46,5 @@ app.*.map.json
 
 .envandroid/key.properties
 android/app/chapsmart-release.jks
+
+.env
